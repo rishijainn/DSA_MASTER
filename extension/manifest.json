@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "DSA Shadow",
+  "version": "1.0.0",
+  "description": "Track your LeetCode submissions with spaced repetition",
+  "permissions": ["storage", "activeTab"],
+  "content_scripts": [
+    {
+      "matches": ["https://leetcode.com/problems/*"],
+      "js": ["content.js"]
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  }
+}
