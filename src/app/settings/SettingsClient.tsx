@@ -14,30 +14,69 @@ export default function SettingsClient({ apiToken }: { apiToken: string }) {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white px-4 py-8 max-w-lg mx-auto">
-      <button onClick={() => router.back()} className="text-zinc-500 text-sm mb-6 hover:text-white transition">
-        ← Back
-      </button>
+    <div style={{ minHeight: '100vh', background: '#1a1a1a', color: '#eff1f6' }}>
+      <nav style={{ background: '#212121', borderBottom: '1px solid #3e3e3e', height: '52px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ width: '24px', height: '24px', background: '#ffa116', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <span style={{ color: '#1a1a1a', fontWeight: '900', fontSize: '11px' }}>S</span>
+          </div>
+          <span style={{ color: '#eff1f6', fontWeight: '600', fontSize: '14px' }}>DSA Shadow</span>
+        </div>
+        <button onClick={() => router.back()} style={{ background: 'transparent', border: 'none', color: '#737373', fontSize: '13px', cursor: 'pointer' }}>
+          ← Back
+        </button>
+      </nav>
 
-      <h1 className="text-2xl font-bold mb-1">Settings</h1>
-      <p className="text-zinc-400 text-sm mb-8">Connect your Chrome extension using this token</p>
+      <div style={{ maxWidth: '640px', margin: '0 auto', padding: '36px 24px' }}>
+        <p style={{ color: '#eff1f6', fontSize: '20px', fontWeight: '700', margin: '0 0 4px 0' }}>Settings</p>
+        <p style={{ color: '#737373', fontSize: '13px', margin: '0 0 28px 0' }}>Manage your account and extension connection</p>
 
-      <div className="bg-zinc-900 rounded-xl p-6 flex flex-col gap-4">
-        <div>
-          <p className="text-zinc-400 text-sm mb-2">Your API Token</p>
-          <div className="bg-zinc-800 rounded-lg px-4 py-3 flex items-center justify-between gap-3">
-            <p className="text-violet-400 text-sm font-mono break-all">{apiToken}</p>
+        {/* Token card */}
+        <div style={{ background: '#282828', border: '1px solid #3e3e3e', borderRadius: '8px', padding: '20px', marginBottom: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+            <div style={{ width: '6px', height: '6px', background: '#ffa116', borderRadius: '50%' }} />
+            <p style={{ color: '#eff1f6', fontSize: '13px', fontWeight: '600', margin: 0 }}>Chrome Extension Token</p>
+          </div>
+          <p style={{ color: '#737373', fontSize: '12px', margin: '0 0 14px 0', paddingLeft: '14px' }}>
+            Paste this in the DSA Shadow extension to link your account. Never expires.
+          </p>
+          <div style={{ background: '#1a1a1a', border: '1px solid #3e3e3e', borderRadius: '6px', padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+            <code style={{ color: '#ffa116', fontFamily: 'monospace', fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {apiToken}
+            </code>
             <button
               onClick={handleCopy}
-              className="shrink-0 bg-violet-600 hover:bg-violet-500 text-white text-xs px-3 py-1.5 rounded-lg transition"
+              style={{
+                flexShrink: 0, padding: '5px 12px', borderRadius: '4px', fontSize: '12px', fontWeight: '600', cursor: 'pointer', transition: 'all 0.15s',
+                background: copied ? 'rgba(0,184,93,0.12)' : '#3e3e3e',
+                color: copied ? '#00b85d' : '#eff1f6bf',
+                border: copied ? '1px solid rgba(0,184,93,0.3)' : '1px solid transparent',
+              }}
             >
-              {copied ? 'Copied!' : 'Copy'}
+              {copied ? '✓ Copied' : 'Copy'}
             </button>
           </div>
         </div>
-        <p className="text-zinc-500 text-xs">
-          Paste this token in the DSA Shadow Chrome extension settings to link your account.
-        </p>
+
+        {/* How to connect */}
+        <div style={{ background: '#282828', border: '1px solid #3e3e3e', borderRadius: '8px', padding: '20px' }}>
+          <p style={{ color: '#eff1f6', fontSize: '13px', fontWeight: '600', margin: '0 0 16px 0' }}>How to connect the extension</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            {[
+              'Install the DSA Shadow Chrome extension',
+              'Click the extension icon in your browser toolbar',
+              'Paste the token above and click Connect',
+              'Solve any LeetCode problem — the popup fires automatically on Accepted',
+            ].map((step, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                <div style={{ width: '20px', height: '20px', background: '#1a1a1a', border: '1px solid #3e3e3e', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <span style={{ color: '#ffa116', fontSize: '10px', fontWeight: '700' }}>{i + 1}</span>
+                </div>
+                <p style={{ color: '#737373', fontSize: '13px', margin: 0, lineHeight: '1.5' }}>{step}</p>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   )

@@ -17,7 +17,6 @@ interface Problem {
 export default function ReviewClient({ problem }: { problem: Problem }) {
   const router = useRouter()
   const supabase = createClient()
-
   const [hintUsed, setHintUsed] = useState<boolean | null>(null)
   const [feltDifficulty, setFeltDifficulty] = useState<FeltDifficulty | null>(null)
   const [error, setError] = useState('')
@@ -25,10 +24,15 @@ export default function ReviewClient({ problem }: { problem: Problem }) {
   const [done, setDone] = useState(false)
   const [nextDate, setNextDate] = useState('')
 
+  function difficultyTag(d: string) {
+    if (d === 'easy') return { color: '#00b85d', background: 'rgba(0,184,93,0.12)', border: '1px solid rgba(0,184,93,0.3)' }
+    if (d === 'medium') return { color: '#ffa116', background: 'rgba(255,161,22,0.12)', border: '1px solid rgba(255,161,22,0.3)' }
+    return { color: '#ff375f', background: 'rgba(255,55,95,0.12)', border: '1px solid rgba(255,55,95,0.3)' }
+  }
+
   async function handleSubmit() {
     if (hintUsed === null) { setError('Did you use a hint or AI?'); return }
     if (!feltDifficulty) { setError('How did it feel?'); return }
-
     setLoading(true)
     setError('')
 
@@ -67,21 +71,28 @@ export default function ReviewClient({ problem }: { problem: Problem }) {
     setLoading(false)
   }
 
-  const feltOptions: FeltDifficulty[] = ['easy', 'medium', 'hard', 'forgot']
+  const feltOptions: { value: FeltDifficulty; label: string }[] = [
+    { value: 'easy', label: 'Easy' },
+    { value: 'medium', label: 'Medium' },
+    { value: 'hard', label: 'Hard' },
+    { value: 'forgot', label: 'Forgot' },
+  ]
 
   if (done) {
     return (
-      <div className="min-h-screen bg-zinc-950 text-white flex items-center justify-center px-4">
-        <div className="max-w-sm w-full bg-zinc-900 rounded-2xl p-8 text-center flex flex-col gap-4">
-          <div className="text-4xl">✅</div>
-          <h2 className="text-xl font-bold">Review logged</h2>
-          <p className="text-zinc-400 text-sm">
-            Next review for <span className="text-white font-medium">{problem.title}</span> scheduled for{' '}
-            <span className="text-violet-400 font-medium">{nextDate}</span>
+      <div style={{ minHeight: '100vh', background: '#1a1a1a', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+        <div style={{ background: '#282828', border: '1px solid #3e3e3e', borderRadius: '12px', padding: '40px', textAlign: 'center', maxWidth: '400px', width: '100%' }}>
+          <div style={{ width: '48px', height: '48px', background: 'rgba(0,184,93,0.12)', border: '1px solid rgba(0,184,93,0.3)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+            <span style={{ color: '#00b85d', fontSize: '20px' }}>✓</span>
+          </div>
+          <p style={{ color: '#eff1f6', fontSize: '18px', fontWeight: '700', margin: '0 0 8px 0' }}>Review logged</p>
+          <p style={{ color: '#737373', fontSize: '13px', margin: '0 0 24px 0' }}>
+            Next review for <span style={{ color: '#eff1f6', fontWeight: '500' }}>{problem.title}</span> scheduled for{' '}
+            <span style={{ color: '#ffa116', fontWeight: '600' }}>{nextDate}</span>
           </p>
           <button
             onClick={() => router.push('/dashboard')}
-            className="mt-2 bg-violet-600 hover:bg-violet-500 text-white rounded-lg py-3 text-sm font-medium transition"
+            style={{ background: '#ffa116', color: '#1a1a1a', border: 'none', borderRadius: '6px', padding: '10px 24px', fontSize: '13px', fontWeight: '700', cursor: 'pointer', width: '100%' }}
           >
             Back to Dashboard
           </button>
@@ -91,71 +102,106 @@ export default function ReviewClient({ problem }: { problem: Problem }) {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white px-4 py-8 max-w-lg mx-auto">
-      <button onClick={() => router.back()} className="text-zinc-500 text-sm mb-6 hover:text-white transition">
-        ← Back
-      </button>
-
-      <h1 className="text-2xl font-bold mb-1">{problem.title}</h1>
-      <p className="text-zinc-400 text-sm mb-6 capitalize">{problem.difficulty} · Reviewed {problem.review_count}x</p>
-
-      <a
-        href={problem.leetcode_url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="block w-full text-center bg-zinc-900 hover:bg-zinc-800 text-violet-400 rounded-lg py-3 text-sm font-medium transition mb-8"
-      >
-        Open on LeetCode →
-      </a>
-
-      <p className="text-zinc-400 text-sm mb-8">
-        Solve it without AI first. Come back here when you&apos;re done.
-      </p>
-
-      <div className="flex flex-col gap-6">
-        <div className="flex flex-col gap-2">
-          <label className="text-zinc-400 text-sm">Did you use a hint or AI?</label>
-          <div className="flex gap-2">
-            {[{ label: 'Yes', value: true }, { label: 'No', value: false }].map(opt => (
-              <button
-                key={opt.label}
-                onClick={() => setHintUsed(opt.value)}
-                className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${
-                  hintUsed === opt.value ? 'bg-violet-600 text-white' : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
+    <div style={{ minHeight: '100vh', background: '#1a1a1a', color: '#eff1f6' }}>
+      <nav style={{ background: '#212121', borderBottom: '1px solid #3e3e3e', height: '52px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ width: '24px', height: '24px', background: '#ffa116', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <span style={{ color: '#1a1a1a', fontWeight: '900', fontSize: '11px' }}>S</span>
           </div>
+          <span style={{ color: '#eff1f6', fontWeight: '600', fontSize: '14px' }}>DSA Shadow</span>
         </div>
-
-        <div className="flex flex-col gap-2">
-          <label className="text-zinc-400 text-sm">How did it feel?</label>
-          <div className="flex gap-2">
-            {feltOptions.map(f => (
-              <button
-                key={f}
-                onClick={() => setFeltDifficulty(f)}
-                className={`flex-1 py-2 rounded-lg text-sm font-medium capitalize transition ${
-                  feltDifficulty === f ? 'bg-violet-600 text-white' : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800'
-                }`}
-              >
-                {f}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {error && <p className="text-red-400 text-sm">{error}</p>}
-
-        <button
-          onClick={handleSubmit}
-          disabled={loading}
-          className="bg-violet-600 hover:bg-violet-500 text-white rounded-lg py-3 text-sm font-medium transition disabled:opacity-50"
-        >
-          {loading ? 'Saving...' : 'Submit Review'}
+        <button onClick={() => router.back()} style={{ background: 'transparent', border: 'none', color: '#737373', fontSize: '13px', cursor: 'pointer' }}>
+          ← Back to dashboard
         </button>
+      </nav>
+
+      <div style={{ maxWidth: '560px', margin: '0 auto', padding: '36px 24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+          <p style={{ color: '#eff1f6', fontSize: '20px', fontWeight: '700', margin: 0 }}>{problem.title}</p>
+          <span style={{ fontSize: '11px', padding: '2px 10px', borderRadius: '4px', fontWeight: '500', textTransform: 'capitalize', ...difficultyTag(problem.difficulty) }}>
+            {problem.difficulty}
+          </span>
+        </div>
+        <p style={{ color: '#5a5a5a', fontSize: '13px', marginBottom: '24px' }}>
+          Reviewed {problem.review_count}× so far
+        </p>
+
+        <a
+          href={problem.leetcode_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ display: 'block', background: '#282828', border: '1px solid #3e3e3e', borderRadius: '6px', padding: '11px 16px', color: '#ffa116', fontSize: '13px', textAlign: 'center', textDecoration: 'none', marginBottom: '12px', fontWeight: '500' }}
+        >
+          Open on LeetCode →
+        </a>
+
+        <p style={{ color: '#5a5a5a', fontSize: '12px', marginBottom: '28px', textAlign: 'center' }}>
+          Solve it without AI first. Come back when done.
+        </p>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div>
+            <p style={{ color: '#eff1f6bf', fontSize: '13px', marginBottom: '10px' }}>Did you use a hint or AI?</p>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              {[{ label: 'Yes', value: true }, { label: 'No', value: false }].map(opt => (
+                <button
+                  key={opt.label}
+                  onClick={() => setHintUsed(opt.value)}
+                  style={{
+                    flex: 1, padding: '9px', borderRadius: '6px', fontSize: '13px', fontWeight: '500', cursor: 'pointer', transition: 'all 0.15s',
+                    background: hintUsed === opt.value ? 'rgba(255,161,22,0.12)' : '#282828',
+                    border: hintUsed === opt.value ? '1px solid #ffa116' : '1px solid #3e3e3e',
+                    color: hintUsed === opt.value ? '#ffa116' : '#737373',
+                  }}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p style={{ color: '#eff1f6bf', fontSize: '13px', marginBottom: '10px' }}>How did it feel?</p>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              {feltOptions.map(opt => {
+                const selected = feltDifficulty === opt.value
+                const colors: Record<string, { color: string; bg: string; border: string }> = {
+                  easy: { color: '#00b85d', bg: 'rgba(0,184,93,0.12)', border: '1px solid rgba(0,184,93,0.5)' },
+                  medium: { color: '#ffa116', bg: 'rgba(255,161,22,0.12)', border: '1px solid rgba(255,161,22,0.5)' },
+                  hard: { color: '#ff375f', bg: 'rgba(255,55,95,0.12)', border: '1px solid rgba(255,55,95,0.5)' },
+                  forgot: { color: '#a0a0a0', bg: 'rgba(160,160,160,0.12)', border: '1px solid rgba(160,160,160,0.4)' },
+                }
+                const c = colors[opt.value]
+                return (
+                  <button
+                    key={opt.value}
+                    onClick={() => setFeltDifficulty(opt.value)}
+                    style={{
+                      flex: 1, padding: '9px', borderRadius: '6px', fontSize: '12px', fontWeight: '500', cursor: 'pointer', transition: 'all 0.15s',
+                      background: selected ? c.bg : '#282828',
+                      border: selected ? c.border : '1px solid #3e3e3e',
+                      color: selected ? c.color : '#737373',
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {error && (
+            <p style={{ color: '#ff375f', fontSize: '12px', textAlign: 'center', margin: 0 }}>{error}</p>
+          )}
+
+          <button
+            onClick={handleSubmit}
+            disabled={loading}
+            style={{ background: loading ? '#cc8010' : '#ffa116', color: '#1a1a1a', border: 'none', borderRadius: '6px', padding: '12px', fontSize: '14px', fontWeight: '700', cursor: loading ? 'not-allowed' : 'pointer', width: '100%' }}
+          >
+            {loading ? 'Saving...' : 'Submit Review'}
+          </button>
+        </div>
       </div>
     </div>
   )
