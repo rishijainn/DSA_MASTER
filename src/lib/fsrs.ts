@@ -36,3 +36,39 @@ export function calculateNextReview({ stability, feltDifficulty, hintUsed }: FSR
     nextReviewDate: nextReviewDate.toISOString().split('T')[0]
   }
 }
+
+// finds the first date from idealDate onwards that has fewer than dailyCommitment problems
+export async function findAvailableDate(
+  idealDate: string,
+  userId: string,
+  dailyCommitment: number,
+  supabase: any,
+  excludeProblemId?: string
+): Promise<string> {
+  let date = new Date(idealDate)
+
+  for (let i = 0; i < 30; i++) {
+    const dateStr = date.toISOString().split('T')[0]
+
+    let query = supabase
+      .from('problems')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('next_review_date', dateStr)
+
+    if (excludeProblemId) {
+      query = query.neq('id', excludeProblemId)
+    }
+
+    const { count } = await query
+
+    if ((count ?? 0) < dailyCommitment) {
+      return dateStr
+    }
+
+    date.setDate(date.getDate() + 1)
+  }
+
+  // fallback — return idealDate if no slot found in 30 days
+  return idealDate
+}

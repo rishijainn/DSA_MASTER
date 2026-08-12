@@ -2,12 +2,28 @@
   "manifest_version": 3,
   "name": "DSA Shadow",
   "version": "1.0.0",
-  "description": "Track your LeetCode submissions with spaced repetition",
-  "permissions": ["storage", "activeTab"],
+  "description": "Track your LeetCode and GFG submissions with spaced repetition",
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
   "content_scripts": [
     {
-      "matches": ["https://leetcode.com/problems/*"],
-      "js": ["content.js"]
+      "matches": [
+        "https://leetcode.com/problems/*"
+      ],
+      "js": [
+        "content.js"
+      ]
+    },
+    {
+      "matches": [
+        "https://www.geeksforgeeks.org/problems/*",
+        "https://practice.geeksforgeeks.org/*"
+      ],
+      "js": [
+        "content-gfg.js"
+      ]
     }
   ],
   "action": {

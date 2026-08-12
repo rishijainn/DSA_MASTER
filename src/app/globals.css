@@ -17,5 +17,8 @@ input::placeholder {
 
 input:focus {
   outline: none;
+}
+
+input:not(.signup-input):not(.login-input):focus {
   border-color: #ffa116 !important;
 }

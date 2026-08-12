@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { calculateNextReview, FeltDifficulty } from '@/lib/fsrs'
+import { calculateNextReview, FeltDifficulty, findAvailableDate } from '@/lib/fsrs'
+
 
 interface Problem {
   id: string
@@ -36,14 +37,32 @@ export default function ReviewClient({ problem }: { problem: Problem }) {
     setLoading(true)
     setError('')
 
-    const { newStability, nextReviewDate } = calculateNextReview({
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { router.push('/login'); return }
+
+    // get daily commitment
+    const { data: settings } = await supabase
+      .from('user_settings')
+      .select('daily_commitment')
+      .eq('user_id', user.id)
+      .single()
+
+    const dailyCommitment = settings?.daily_commitment ?? 5
+
+    const { newStability, nextReviewDate: idealDate } = calculateNextReview({
       stability: problem.stability,
       feltDifficulty,
       hintUsed
     })
 
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { router.push('/login'); return }
+
+    const nextReviewDate = await findAvailableDate(
+      idealDate,
+      user.id,
+      dailyCommitment,
+      supabase,
+      problem.id
+    )
 
     const { error: updateError } = await supabase
       .from('problems')
@@ -65,6 +84,9 @@ export default function ReviewClient({ problem }: { problem: Problem }) {
       hint_used: hintUsed,
       felt_difficulty: feltDifficulty
     })
+    try {
+      await fetch('/api/update-streak', { method: 'POST' })
+    } catch { }
 
     setNextDate(nextReviewDate)
     setDone(true)
@@ -103,18 +125,6 @@ export default function ReviewClient({ problem }: { problem: Problem }) {
 
   return (
     <div style={{ minHeight: '100vh', background: '#1a1a1a', color: '#eff1f6' }}>
-      <nav style={{ background: '#212121', borderBottom: '1px solid #3e3e3e', height: '52px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div style={{ width: '24px', height: '24px', background: '#ffa116', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ color: '#1a1a1a', fontWeight: '900', fontSize: '11px' }}>S</span>
-          </div>
-          <span style={{ color: '#eff1f6', fontWeight: '600', fontSize: '14px' }}>DSA Shadow</span>
-        </div>
-        <button onClick={() => router.back()} style={{ background: 'transparent', border: 'none', color: '#737373', fontSize: '13px', cursor: 'pointer' }}>
-          ← Back to dashboard
-        </button>
-      </nav>
-
       <div style={{ maxWidth: '560px', margin: '0 auto', padding: '36px 24px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
           <p style={{ color: '#eff1f6', fontSize: '20px', fontWeight: '700', margin: 0 }}>{problem.title}</p>
