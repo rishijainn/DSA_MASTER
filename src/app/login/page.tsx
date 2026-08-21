@@ -384,7 +384,7 @@ export default function LoginPage() {
 
             <button className="auth-submit" onClick={handleLogin} disabled={loading}>
               {loading ? 'Signing in...' : 'Sign In →'}
-            </button>
+            </button> 
 
             {/* <div className="auth-divider">
               <div className="auth-divider-line" />
