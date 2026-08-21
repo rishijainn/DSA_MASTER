@@ -30,14 +30,14 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // change this line
   if (
     !user &&
     !request.nextUrl.pathname.startsWith("/login") &&
-    !request.nextUrl.pathname.startsWith("/signup")
+    !request.nextUrl.pathname.startsWith("/signup") &&
+    !request.nextUrl.pathname.startsWith("/landing")
   ) {
     const url = request.nextUrl.clone();
-    url.pathname = "/login";
+    url.pathname = "/";
     return NextResponse.redirect(url);
   }
 
@@ -51,5 +51,7 @@ export const config = {
     "/review/:path*",
     "/settings/:path*",
     "/discover/:path*",
+    "/progress/:path*",
+    "/history/:path*",
   ],
 };

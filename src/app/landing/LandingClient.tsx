@@ -251,7 +251,7 @@ function Hero() {
         >
           <motion.div initial={reduce ? { opacity: 0 } : { opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
             <a
-              href="/landing"
+              href="/"
               style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}
             >
               <span
@@ -289,7 +289,7 @@ function Hero() {
               How it works
             </a>
             <a
-              href="/dashboard"
+              href="/login"
               style={{
                 fontFamily: MONO,
                 fontSize: 12,
@@ -304,7 +304,7 @@ function Hero() {
                 gap: 6,
               }}
             >
-              Hunter Dashboard <span style={{ color: BLUE }}>→</span>
+              Get Started <span style={{ color: BLUE }}>→</span>
             </a>
           </motion.div>
         </nav>
