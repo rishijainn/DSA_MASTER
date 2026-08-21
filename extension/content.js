@@ -1,4 +1,4 @@
-const API_URL = "http://localhost:3000"; // change this to your deployed URL or localhost
+const API_URL = "https://dsa-master-bice.vercel.app";
 
 let popupShown = false;
 
