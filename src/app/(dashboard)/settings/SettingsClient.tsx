@@ -63,6 +63,7 @@ export default function SettingsClient({
   memberSince,
   totalCount,
   dailyCommitment,
+  extensionConnected,
 }: {
   apiToken: string
   userName: string
@@ -70,6 +71,7 @@ export default function SettingsClient({
   memberSince: string
   totalCount: number
   dailyCommitment: number
+  extensionConnected: boolean
 }) {
   const [copied, setCopied] = useState(false)
   const [name, setName] = useState(userName)
@@ -177,9 +179,9 @@ export default function SettingsClient({
               <div style={{
                 position: 'absolute', bottom: -2, right: -2,
                 width: 16, height: 16, borderRadius: 999,
-                background: apiToken ? GREEN : MUTED,
+                background: extensionConnected ? GREEN : apiToken ? GOLD : MUTED,
                 border: `2.5px solid ${CARD}`,
-                boxShadow: apiToken ? `0 0 6px ${GREEN}88` : 'none',
+                boxShadow: extensionConnected ? `0 0 6px ${GREEN}88` : 'none',
               }} />
             </div>
 
@@ -241,12 +243,12 @@ export default function SettingsClient({
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
                     <div style={{
                       width: 7, height: 7, borderRadius: 999,
-                      background: apiToken ? GREEN : MUTED,
-                      boxShadow: apiToken ? `0 0 6px ${GREEN}` : 'none',
-                      animation: apiToken ? 'pulse 2s ease-in-out infinite' : 'none',
+                      background: extensionConnected ? GREEN : apiToken ? GOLD : MUTED,
+                      boxShadow: extensionConnected ? `0 0 6px ${GREEN}` : 'none',
+                      animation: extensionConnected ? 'pulse 2s ease-in-out infinite' : 'none',
                     }} />
                     <span style={{ color: SUBTEXT, fontSize: 12, fontFamily: MONO }}>
-                      {apiToken ? 'Synced with extension' : 'Not configured'}
+                      {extensionConnected ? 'Synced with extension' : apiToken ? 'Token set — extension idle' : 'Not configured'}
                     </span>
                   </div>
                 </div>
@@ -449,15 +451,15 @@ export default function SettingsClient({
         }}>
           <div style={{
             width: 6, height: 6, borderRadius: 999,
-            background: apiToken ? GREEN : MUTED,
-            boxShadow: apiToken ? `0 0 6px ${GREEN}66` : 'none',
+            background: extensionConnected ? GREEN : apiToken ? GOLD : MUTED,
+            boxShadow: extensionConnected ? `0 0 6px ${GREEN}66` : 'none',
           }} />
           <span style={{ color: MUTED, fontSize: 12, fontFamily: MONO }}>
-            Extension: {apiToken ? 'Connected' : 'Not connected'}
+            Extension: {extensionConnected ? 'Connected' : apiToken ? 'Idle' : 'Not connected'}
           </span>
           <span style={{ color: BORDER, margin: '0 2px' }}>·</span>
           <span style={{ color: MUTED, fontSize: 12, fontFamily: MONO }}>
-            Last synced: {apiToken ? 'just now' : 'never'}
+            Last synced: {extensionConnected ? 'recently' : apiToken ? 'over 24h ago' : 'never'}
           </span>
           <span style={{ color: BORDER, margin: '0 2px' }}>·</span>
           <span style={{ color: MUTED, fontSize: 12, fontFamily: MONO }}>v1.0.0</span>
