@@ -18,8 +18,8 @@ export async function GET(request: NextRequest) {
           return request.cookies.getAll()
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            request.cookies.set(name, value, options),
+          cookiesToSet.forEach(({ name, value }) =>
+            request.cookies.set(name, value),
           )
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options),
@@ -33,11 +33,6 @@ export async function GET(request: NextRequest) {
   const cookieArray = request.cookies.getAll().map((cookie) => ({
     name: cookie.name,
     value: cookie.value,
-    path: cookie.path,
-    domain: cookie.domain,
-    httpOnly: cookie.httpOnly,
-    secure: cookie.secure,
-    sameSite: cookie.sameSite,
   }))
 
   const { data, error } = await supabase.auth.getUser()
