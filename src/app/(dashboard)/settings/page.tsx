@@ -19,18 +19,9 @@ export default async function SettingsPage() {
     .select('*', { count: 'exact', head: true })
     .eq('user_id', user.id)
 
-  // Three states:
-  // Green: ping within last 2 min (actively connected)
-  // Yellow: token exists, ping is stale (>2 min ago) (idle)
-  // Red: token exists but ping is null (explicitly disconnected) OR no token
+  // Green: ping within last 2 min (connected). Red: everything else.
   const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString()
-  const hasToken = Boolean(settings?.api_token)
-  const hasPing = Boolean(settings?.last_extension_ping)
-  const pingFresh = hasPing && settings!.last_extension_ping > twoMinutesAgo
-
-  const extensionConnected = pingFresh
-  const extensionIdle = hasToken && hasPing && !pingFresh
-  const extensionDisconnected = hasToken && !hasPing
+  const extensionConnected = Boolean(settings?.last_extension_ping && settings.last_extension_ping > twoMinutesAgo)
 
   const userName = settings?.username ?? user.email?.split('@')[0] ?? 'Hunter'
   const memberSince = user.created_at
@@ -46,8 +37,6 @@ export default async function SettingsPage() {
       totalCount={totalCount ?? 0}
       dailyCommitment={settings?.daily_commitment ?? 5}
       extensionConnected={extensionConnected}
-      extensionIdle={extensionIdle}
-      extensionDisconnected={extensionDisconnected}
       lastPing={settings?.last_extension_ping ?? null}
     />
   )
