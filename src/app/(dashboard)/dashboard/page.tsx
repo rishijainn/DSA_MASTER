@@ -12,27 +12,26 @@ export default async function DashboardPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: settings } = await supabase
-    .from("user_settings")
-    .select("daily_commitment, current_streak, longest_streak, last_activity_date, username")
-    .eq("user_id", user.id)
-    .single();
-
   const today = localDateStr(new Date());
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
-  const { data: dueProblems } = await supabase
-    .from("problems")
-    .select("*")
-    .eq("user_id", user.id)
-    .lte("next_review_date", today)
-    .order("next_review_date", { ascending: true });
+  // Run all independent queries in parallel
+  const [settingsRes, dueRes, allRes, countRes, reviewRes, problemRes] = await Promise.all([
+    supabase.from("user_settings").select("daily_commitment, current_streak, longest_streak, last_activity_date, username").eq("user_id", user.id).single(),
+    supabase.from("problems").select("*").eq("user_id", user.id).lte("next_review_date", today).order("next_review_date", { ascending: true }),
+    supabase.from("problems").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(10),
+    supabase.from("problems").select("*", { count: "exact", head: true }).eq("user_id", user.id),
+    supabase.from("review_logs").select("reviewed_at").eq("user_id", user.id).gte("reviewed_at", sixMonthsAgo.toISOString()),
+    supabase.from("problems").select("created_at, next_review_date").eq("user_id", user.id).gte("created_at", sixMonthsAgo.toISOString()),
+  ]);
 
-  const { data: allProblems } = await supabase
-    .from("problems")
-    .select("*")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false })
-    .limit(10);
+  const settings = settingsRes.data;
+  const dueProblems = dueRes.data;
+  const allProblems = allRes.data;
+  const totalCount = countRes.count;
+  const reviewRows = reviewRes.data;
+  const problemRows = problemRes.data;
 
   const seen = new Set();
   const uniqueProblems = (allProblems ?? [])
@@ -42,32 +41,6 @@ export default async function DashboardPage() {
       return true;
     })
     .slice(0, 5);
-
-  const { count: totalCount } = await supabase
-    .from("problems")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", user.id);
-
-  // Activity data for the coding-streak heatmap — only qualifying days light up.
-  // A day counts as "active" when:
-  //   1. The user completed at least one review (review_logs entry), OR
-  //   2. The user solved a new problem AND had zero problems due that day
-  const sixMonthsAgo = new Date();
-  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-
-  // Reviews completed in the last 6 months
-  const { data: reviewRows } = await supabase
-    .from("review_logs")
-    .select("reviewed_at")
-    .eq("user_id", user.id)
-    .gte("reviewed_at", sixMonthsAgo.toISOString());
-
-  // Problems created in the last 6 months (for new-problem qualifying check)
-  const { data: problemRows } = await supabase
-    .from("problems")
-    .select("created_at, next_review_date")
-    .eq("user_id", user.id)
-    .gte("created_at", sixMonthsAgo.toISOString());
 
   const activityCounts = new Map<string, number>();
 
