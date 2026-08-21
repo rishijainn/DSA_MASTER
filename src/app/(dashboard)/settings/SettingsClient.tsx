@@ -64,6 +64,7 @@ export default function SettingsClient({
   totalCount,
   dailyCommitment,
   extensionConnected,
+  lastPing,
 }: {
   apiToken: string
   userName: string
@@ -72,6 +73,7 @@ export default function SettingsClient({
   totalCount: number
   dailyCommitment: number
   extensionConnected: boolean
+  lastPing: string | null
 }) {
   const [copied, setCopied] = useState(false)
   const [name, setName] = useState(userName)
@@ -136,6 +138,15 @@ export default function SettingsClient({
       setNameError('Failed to save name')
       setSaving(false)
     }
+  }
+
+  function timeAgo(ts: string | null): string {
+    if (!ts) return 'never'
+    const diff = Date.now() - new Date(ts).getTime()
+    if (diff < 60_000) return 'just now'
+    if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`
+    if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`
+    return `${Math.floor(diff / 86_400_000)}d ago`
   }
 
   return (
@@ -459,7 +470,7 @@ export default function SettingsClient({
           </span>
           <span style={{ color: BORDER, margin: '0 2px' }}>·</span>
           <span style={{ color: MUTED, fontSize: 12, fontFamily: MONO }}>
-            Last synced: {extensionConnected ? 'recently' : apiToken ? 'over 24h ago' : 'never'}
+            Last synced: {apiToken ? timeAgo(lastPing) : 'never'}
           </span>
           <span style={{ color: BORDER, margin: '0 2px' }}>·</span>
           <span style={{ color: MUTED, fontSize: 12, fontFamily: MONO }}>v1.0.0</span>
