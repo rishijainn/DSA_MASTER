@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
 
     const { error } = await supabase
       .from('user_settings')
-      .update({ last_extension_ping: new Date().toISOString() })
+      .update({ extension_connected: true })
       .eq('api_token', token)
 
     if (error) {

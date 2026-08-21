@@ -19,10 +19,9 @@ export async function POST(request: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
 
-    // Clear the ping so settings shows red (token still visible for reconnect)
     const { error } = await supabase
       .from('user_settings')
-      .update({ last_extension_ping: null })
+      .update({ extension_connected: false })
       .eq('api_token', token)
 
     if (error) {

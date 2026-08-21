@@ -10,7 +10,7 @@ export default async function SettingsPage() {
 
   const { data: settings } = await supabase
     .from('user_settings')
-    .select('api_token, username, daily_commitment, last_extension_ping')
+    .select('api_token, username, daily_commitment, extension_connected')
     .eq('user_id', user.id)
     .single()
 
@@ -19,9 +19,7 @@ export default async function SettingsPage() {
     .select('*', { count: 'exact', head: true })
     .eq('user_id', user.id)
 
-  // Green: ping within last 2 min (connected). Red: everything else.
-  const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString()
-  const extensionConnected = Boolean(settings?.last_extension_ping && settings.last_extension_ping > twoMinutesAgo)
+  const extensionConnected = Boolean(settings?.extension_connected)
 
   const userName = settings?.username ?? user.email?.split('@')[0] ?? 'Hunter'
   const memberSince = user.created_at
@@ -37,7 +35,6 @@ export default async function SettingsPage() {
       totalCount={totalCount ?? 0}
       dailyCommitment={settings?.daily_commitment ?? 5}
       extensionConnected={extensionConnected}
-      lastPing={settings?.last_extension_ping ?? null}
     />
   )
 }
