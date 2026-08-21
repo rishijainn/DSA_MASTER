@@ -21,9 +21,9 @@ async function render() {
   if (token) {
     // ping immediately on open
     pingServer(token)
-    // ping every 30s while popup is open
+    // ping every 10s while popup is open
     if (pingInterval) clearInterval(pingInterval)
-    pingInterval = setInterval(() => pingServer(token), 30000)
+    pingInterval = setInterval(() => pingServer(token), 10000)
 
     content.innerHTML = `
       <p>Connected ✓</p>
@@ -31,6 +31,16 @@ async function render() {
     `
     document.getElementById('logout').addEventListener('click', async () => {
       if (pingInterval) clearInterval(pingInterval)
+      // tell server to clear token so settings shows red
+      try {
+        await fetch(`${API_URL}/api/extension-disconnect`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        })
+      } catch {}
       await chrome.storage.local.remove('token')
       render()
     })
