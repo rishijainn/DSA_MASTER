@@ -13,6 +13,12 @@ interface Problem {
   leetcode_url: string
   stability: number
   review_count: number
+  last_reviewed_at: string | null
+  next_review_date: string
+}
+
+function localDateStr(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 export default function ReviewClient({ problem }: { problem: Problem }) {
@@ -24,6 +30,9 @@ export default function ReviewClient({ problem }: { problem: Problem }) {
   const [loading, setLoading] = useState(false)
   const [done, setDone] = useState(false)
   const [nextDate, setNextDate] = useState('')
+
+  const alreadyReviewedToday = problem.last_reviewed_at
+    && localDateStr(new Date(problem.last_reviewed_at)) === localDateStr(new Date())
 
   function difficultyTag(d: string) {
     if (d === 'easy') return { color: '#00b85d', background: 'rgba(0,184,93,0.12)', border: '1px solid rgba(0,184,93,0.3)' }
@@ -118,6 +127,41 @@ export default function ReviewClient({ problem }: { problem: Problem }) {
           >
             Back to Dashboard
           </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (alreadyReviewedToday) {
+    return (
+      <div style={{ minHeight: '100vh', background: '#1a1a1a', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+        <div style={{ background: '#282828', border: '1px solid #3e3e3e', borderRadius: '12px', padding: '40px', textAlign: 'center', maxWidth: '400px', width: '100%' }}>
+          <div style={{ width: '48px', height: '48px', background: 'rgba(88,166,255,0.12)', border: '1px solid rgba(88,166,255,0.3)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+            <span style={{ color: '#58a6ff', fontSize: '20px' }}>✓</span>
+          </div>
+          <p style={{ color: '#eff1f6', fontSize: '18px', fontWeight: '700', margin: '0 0 8px 0' }}>Already reviewed today</p>
+          <p style={{ color: '#737373', fontSize: '13px', margin: '0 0 6px 0' }}>
+            <span style={{ color: '#eff1f6', fontWeight: '500' }}>{problem.title}</span> was already reviewed today.
+          </p>
+          <p style={{ color: '#737373', fontSize: '13px', margin: '0 0 24px 0' }}>
+            Next review: <span style={{ color: '#ffa116', fontWeight: '600' }}>{problem.next_review_date}</span>
+          </p>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              onClick={() => router.push('/dashboard')}
+              style={{ flex: 1, background: '#282828', color: '#737373', border: '1px solid #3e3e3e', borderRadius: '6px', padding: '10px', fontSize: '13px', fontWeight: '500', cursor: 'pointer' }}
+            >
+              Dashboard
+            </button>
+            <a
+              href={problem.leetcode_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ flex: 1, background: '#ffa116', color: '#1a1a1a', border: 'none', borderRadius: '6px', padding: '10px', fontSize: '13px', fontWeight: '700', cursor: 'pointer', textDecoration: 'none', textAlign: 'center' }}
+            >
+              Open on LeetCode
+            </a>
+          </div>
         </div>
       </div>
     )

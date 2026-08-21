@@ -34,9 +34,11 @@ function formatDate(dateStr: string) {
 }
 
 function daysUntil(dateStr: string) {
-    const today = new Date()
-    const due = new Date(dateStr)
-    const diff = Math.floor((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+    const now = new Date()
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    const todayMs = new Date(`${todayStr}T00:00:00`).getTime()
+    const dueMs = new Date(`${dateStr}T00:00:00`).getTime()
+    const diff = Math.round((dueMs - todayMs) / (1000 * 60 * 60 * 24))
     if (diff < 0) return { text: `${Math.abs(diff)}d overdue`, color: '#d29922' }
     if (diff === 0) return { text: 'Due today', color: '#58a6ff' }
     return { text: `In ${diff}d`, color: '#484f58' }

@@ -6,6 +6,8 @@ import { usePathname } from 'next/navigation'
 const NAV_ITEMS = [
   { icon: '🏠', label: 'Dashboard', path: '/dashboard' },
   { icon: '📋', label: 'History', path: '/history' },
+  { icon: '🧭', label: 'Discover', path: '/discover' },
+  { icon: '🏆', label: 'Progress', path: '/progress' },
   { icon: '⚙️', label: 'Settings', path: '/settings' },
 ]
 
@@ -85,7 +87,15 @@ export default function Sidebar() {
                 border: active ? '1px solid rgba(56,139,253,0.25)' : '1px solid transparent',
                 color: active ? '#58a6ff' : '#8b949e',
                 fontWeight: active ? '600' : '400',
-                transition: 'all 0.2s ease',
+                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = active ? 'rgba(56,139,253,0.15)' : 'rgba(56,139,253,0.08)';
+                e.currentTarget.style.transform = 'translateX(4px)';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = active ? 'rgba(56,139,253,0.12)' : 'transparent';
+                e.currentTarget.style.transform = 'translateX(0)';
               }}
             >
               <span style={{ fontSize: '16px', width: '22px', textAlign: 'center' }}>{item.icon}</span>
@@ -95,24 +105,6 @@ export default function Sidebar() {
         })}
       </nav>
 
-      <div style={{ padding: '20px', borderTop: '1px solid #21262d' }}>
-        <Link
-          href="/add-question"
-          style={{
-            display: 'block',
-            width: '100%',
-            padding: '14px',
-            borderRadius: '10px',
-            background: 'linear-gradient(135deg, #1f6feb 0%, #388bfd 50%, #58a6ff 100%)',
-            color: 'white',
-            fontWeight: '700',
-            textAlign: 'center',
-            textDecoration: 'none',
-          }}
-        >
-          + Add Problem
-        </Link>
-      </div>
     </aside>
   )
 }

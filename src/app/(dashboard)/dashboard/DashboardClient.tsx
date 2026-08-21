@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { getRankInfo, getRankProgress } from '@/lib/rank'
+import { getRankInfo } from '@/lib/rank'
 
 interface Problem {
   id: string
@@ -13,6 +13,14 @@ interface Problem {
   leetcode_slug: string
 }
 
+// One day's activity for the streak heatmap - count is how many problems
+// were solved/reviewed on that date. Built from real Supabase data in
+// page.tsx (see the query added there), not fabricated client-side.
+interface ActivityDay {
+  date: string // 'YYYY-MM-DD'
+  count: number
+}
+
 interface Props {
   shownProblems: Problem[]
   queueCount: number
@@ -21,27 +29,47 @@ interface Props {
   isBacklogged: boolean
   totalCount: number
   streak: number
+  longestStreak: number
   streakActive: boolean
+  activityData: ActivityDay[]
+  userName: string
 }
+
+const BG = '#0d1117'
+const CARD = '#161b22'
+const BORDER = '#21262d'
+const TEXT = '#e6edf3'
+const SUBTEXT = '#8b949e'
+const MUTED = '#484f58'
+const BLUE = '#58a6ff'
+const PURPLE = '#a78bfa'
+const RED = '#f85149'
+const GOLD = '#d29922'
+const GREEN = '#3fb950'
+const GRADIENT = 'linear-gradient(135deg, #58a6ff, #a78bfa)'
+const MONO = "var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace"
 
 function getDifficultyConfig(difficulty: string) {
   switch (difficulty) {
     case 'hard':
-      return { label: 'S', color: '#f85149', bg: 'rgba(248,81,73,0.15)', border: 'rgba(248,81,73,0.4)', glow: 'rgba(248,81,73,0.3)' };
+      return { label: 'S', color: RED, bg: 'rgba(248,81,73,0.15)', border: 'rgba(248,81,73,0.4)', glow: 'rgba(248,81,73,0.3)' };
     case 'medium':
-      return { label: 'A', color: '#d29922', bg: 'rgba(210,153,34,0.15)', border: 'rgba(210,153,34,0.4)', glow: 'rgba(210,153,34,0.3)' };
+      return { label: 'A', color: GOLD, bg: 'rgba(210,153,34,0.15)', border: 'rgba(210,153,34,0.4)', glow: 'rgba(210,153,34,0.3)' };
     default:
-      return { label: 'B', color: '#388bfd', bg: 'rgba(56,139,253,0.15)', border: 'rgba(56,139,253,0.4)', glow: 'rgba(56,139,253,0.3)' };
+      return { label: 'B', color: BLUE, bg: 'rgba(56,139,253,0.15)', border: 'rgba(56,139,253,0.4)', glow: 'rgba(56,139,253,0.3)' };
   }
 }
 
+function localDateStr(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 function daysOverdue(dateStr: string) {
-  const today = new Date();
-  const due = new Date(dateStr);
-  const diff = Math.floor((today.getTime() - due.getTime()) / (1000 * 60 * 60 * 24));
-  if (diff === 0) return { text: 'Due today', color: '#8b949e', urgent: false };
-  if (diff > 0) return { text: `${diff}d overdue`, color: '#d29922', urgent: true };
-  return { text: `In ${Math.abs(diff)}d`, color: '#484f58', urgent: false };
+  const today = localDateStr(new Date())
+  const diff = Math.floor((new Date(today).getTime() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24));
+  if (diff === 0) return { text: 'Due today', color: SUBTEXT, urgent: false };
+  if (diff > 0) return { text: `${diff}d overdue`, color: GOLD, urgent: true };
+  return { text: `In ${Math.abs(diff)}d`, color: MUTED, urgent: false };
 }
 
 function ParticlesBg({ className = '', color = 'rgba(88,166,255,0.15)', count = 40 }: { className?: string; color?: string; count?: number }) {
@@ -73,424 +101,498 @@ function ParticlesBg({ className = '', color = 'rgba(88,166,255,0.15)', count = 
   return <canvas ref={ref} className={className} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }} />;
 }
 
-function StatCard({ label, value, color, icon, trend, prefix = '', suffix = '' }: { 
-  label: string; value: string | number; color: string; icon: string; trend?: string; prefix?: string; suffix?: string 
+// Compact mono stat chip, matching the landing preview's profile card
+function Chip({ label, value, color }: { label: string; value: string; color: string }) {
+  return (
+    <div style={{ flex: 1, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 10, padding: '8px 10px', textAlign: 'center', minWidth: 0 }}>
+      <div style={{ color, fontWeight: 800, fontFamily: MONO, fontSize: 14, lineHeight: 1.2 }}>{value}</div>
+      <div style={{ color: MUTED, fontSize: 8, fontFamily: MONO, letterSpacing: '0.08em', marginTop: 3 }}>{label}</div>
+    </div>
+  )
+}
+
+// Rank badge + profile summary + mono stats — the landing preview signature card
+function RankProfileCard({ rankInfo, userName, totalCount, totalReviewed, completionPct }: {
+  rankInfo: ReturnType<typeof getRankInfo>; userName: string; totalCount: number; totalReviewed: number; completionPct: number
 }) {
   return (
     <div style={{
-      background: 'linear-gradient(135deg, #161b22 0%, #0d1117 100%)',
-      border: `1px solid ${color}30`,
-      borderRadius: '12px',
-      padding: '16px',
-      position: 'relative',
-      overflow: 'hidden',
-      transition: 'all 0.3s ease',
+      display: 'grid', gridTemplateColumns: '120px 1fr', gap: 16, alignItems: 'center',
+      background: `linear-gradient(135deg, ${CARD}, ${BG})`, border: `1px solid ${BORDER}`, borderRadius: 16, padding: 16,
+      height: '100%', boxSizing: 'border-box',
     }}>
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '2px', background: `linear-gradient(90deg, transparent, ${color}, transparent)` }} />
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
-        <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: `${color}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px' }}>{icon}</div>
-        <span style={{ color: '#484f58', fontSize: '9px', fontFamily: 'monospace', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{label}</span>
+      <div style={{
+        aspectRatio: '1', borderRadius: 14,
+        background: `linear-gradient(135deg, ${rankInfo.bg}, ${rankInfo.color}1a)`,
+        border: `2px solid ${rankInfo.border}`,
+        boxShadow: `0 8px 32px ${rankInfo.glow}`,
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2,
+      }}>
+        <div style={{ fontFamily: MONO, fontSize: 9, color: SUBTEXT, letterSpacing: '0.2em' }}>RANK</div>
+        <div style={{ color: rankInfo.color, fontSize: 40, fontWeight: 900, fontFamily: MONO, lineHeight: 1 }}>{rankInfo.label}</div>
+        <div style={{ fontFamily: MONO, fontSize: 9, color: rankInfo.color }}>{rankInfo.rank}</div>
       </div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
-        <span style={{ color, fontFamily: 'monospace', fontWeight: '800', fontSize: '28px', lineHeight: 1 }}>{prefix}{value}{suffix}</span>
-        {trend && <span style={{ color: '#3fb950', fontSize: '11px', fontWeight: '600', marginLeft: '4px' }}>{trend}</span>}
+      <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 8 }}>
+        <div>
+          <div style={{ color: SUBTEXT, fontSize: 11, fontFamily: MONO, marginBottom: 4 }}>PROFILE SUMMARY</div>
+          <div style={{ color: TEXT, fontWeight: 800, fontSize: 18, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{userName}</div>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Chip label="TRACKED" value={String(totalCount)} color={BLUE} />
+          <Chip label="REVIEWS" value={String(totalReviewed)} color={PURPLE} />
+          <Chip label="TODAY" value={`${completionPct}%`} color={completionPct === 100 ? GREEN : GOLD} />
+        </div>
       </div>
     </div>
-  );
+  )
 }
 
-function QuestCard({ problem, index, onStart }: { problem: Problem; index: number; onStart: () => void }) {
-  const [hovered, setHovered] = useState(false);
+// Compact horizontal quest row — matches the landing preview's Daily Quests
+function QuestRow({ problem, index, onStart }: { problem: Problem; index: number; onStart: () => void }) {
   const config = getDifficultyConfig(problem.difficulty);
   const overdue = daysOverdue(problem.next_review_date);
-
-  return (
-    <div
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        background: hovered ? 'linear-gradient(135deg, #1c2430 0%, #161b22 100%)' : '#161b22',
-        border: `1px solid ${hovered ? config.border : '#21262d'}`,
-        borderRadius: '12px',
-        padding: '18px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '12px',
-        cursor: 'pointer',
-        transition: 'all 0.2s ease',
-        position: 'relative',
-        overflow: 'hidden',
-        boxShadow: hovered ? `0 8px 32px ${config.glow}` : 'none',
-      }}
-    >
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '3px', background: `linear-gradient(90deg, ${config.color}, ${config.color}88)` }} />
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-        <span style={{ color: '#484f58', fontSize: '10px', fontFamily: 'monospace' }}>QUEST #{String(index + 1).padStart(4, '0')}</span>
-        <div style={{
-          width: '32px', height: '32px', borderRadius: '8px',
-          background: config.bg, border: `1px solid ${config.border}`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-          boxShadow: `0 0 12px ${config.glow}`
-        }}>
-          <span style={{ color: config.color, fontWeight: '900', fontSize: '14px', textShadow: `0 0 8px ${config.color}` }}>{config.label}</span>
-        </div>
-      </div>
-      <div style={{ flex: 1 }}>
-        <p style={{ color: '#e6edf3', fontSize: '15px', fontWeight: '700', margin: '0 0 6px 0', lineHeight: 1.3 }}>{problem.title}</p>
-        <p style={{ color: '#8b949e', fontSize: '12px', margin: 0, lineHeight: 1.5 }}>
-          <span style={{ color: config.color, fontWeight: '600', textTransform: 'capitalize' }}>{problem.difficulty}</span> difficulty · {problem.review_count}× cleared
-        </p>
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto', paddingTop: '4px' }}>
-        <span style={{ 
-          color: overdue.urgent ? '#d29922' : overdue.color, 
-          fontSize: '11px', 
-          fontFamily: 'monospace',
-          fontWeight: overdue.urgent ? '700' : '400',
-          animation: overdue.urgent ? 'pulse 1.5s ease-in-out infinite' : 'none'
-        }}>{overdue.text}</span>
-        <button
-          onClick={(e) => { e.stopPropagation(); onStart(); }}
-          style={{
-            background: config.bg, border: `1px solid ${config.border}`, borderRadius: '6px',
-            padding: '7px 16px', color: config.color, fontSize: '12px', fontWeight: '700',
-            cursor: 'pointer', transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: '6px',
-            boxShadow: `0 0 0 1px ${config.color}20`
-          }}
-          onMouseEnter={e => e.currentTarget.style.cssText += `background: ${config.color}; color: white; box-shadow: 0 0 16px ${config.glow};`}
-          onMouseLeave={e => e.currentTarget.style.cssText = `background: ${config.bg}; color: ${config.color}; border: 1px solid ${config.border}; border-radius: 6px; padding: 7px 16px; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.15s; display: flex; align-items: center; gap: 6px; box-shadow: 0 0 0 1px ${config.color}20;`}
-        >
-          <span>Start</span>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function RankDisplay({ rankInfo, totalCount, rankProgress }: { rankInfo: ReturnType<typeof getRankInfo>; totalCount: number; rankProgress: number }) {
-  return (
-    <div style={{ background: 'linear-gradient(135deg, #161b22 0%, #0d1117 100%)', border: `1px solid ${rankInfo.border}`, borderRadius: '16px', padding: '24px', position: 'relative', overflow: 'hidden' }}>
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '2px', background: `linear-gradient(90deg, transparent, ${rankInfo.color}, transparent)` }} />
-      <div style={{ position: 'absolute', top: '20px', right: '20px', width: '80px', height: '80px', background: `radial-gradient(circle, ${rankInfo.color}15 0%, transparent 70%)`, borderRadius: '50%', pointerEvents: 'none' }} />
-      <p style={{ color: '#484f58', fontSize: '9px', fontFamily: 'monospace', textTransform: 'uppercase', letterSpacing: '0.1em', margin: '0 0 16px 0', position: 'relative', zIndex: 1 }}>CURRENT RANK</p>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '18px', position: 'relative', zIndex: 1 }}>
-        <div style={{
-          width: '56px', height: '56px', borderRadius: '14px',
-          background: `linear-gradient(135deg, ${rankInfo.bg}, ${rankInfo.color}30)`,
-          border: `2px solid ${rankInfo.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-          boxShadow: `0 0 24px ${rankInfo.glow}, inset 0 0 24px ${rankInfo.color}20`
-        }}>
-          <span style={{ color: rankInfo.color, fontWeight: '900', fontSize: '26px', textShadow: `0 0 12px ${rankInfo.color}` }}>{rankInfo.label}</span>
-        </div>
-        <div>
-          <p style={{ color: '#e6edf3', fontSize: '18px', fontWeight: '800', margin: '0 0 4px 0', letterSpacing: '-0.3px' }}>{rankInfo.rank}</p>
-          <p style={{ color: '#8b949e', fontSize: '12px', margin: 0 }}>{totalCount} problems tracked</p>
-        </div>
-      </div>
-      <div style={{ position: 'relative', zIndex: 1 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-          <span style={{ color: '#484f58', fontSize: '10px', fontFamily: 'monospace' }}>Progress to {rankInfo.nextRank || 'Max'}</span>
-          <span style={{ color: rankInfo.color, fontSize: '10px', fontFamily: 'monospace', fontWeight: '700' }}>{rankProgress}%</span>
-        </div>
-        <div style={{ height: '6px', background: '#0d1117', borderRadius: '3px', overflow: 'hidden', position: 'relative' }}>
-          <div style={{
-            height: '100%', width: `${rankProgress}%`,
-            background: `linear-gradient(90deg, ${rankInfo.color}, ${rankInfo.color}aa)`,
-            borderRadius: '3px', transition: 'width 1s cubic-bezier(0.4, 0, 0.2, 1)',
-            boxShadow: `0 0 8px ${rankInfo.color}, 0 0 16px ${rankInfo.color}80`
-          }} />
-        </div>
-      </div>
-      <p style={{ 
-        color: rankInfo.next ? '#484f58' : rankInfo.color, 
-        fontSize: '11px', fontFamily: 'monospace', margin: '12px 0 0 0',
-        fontWeight: rankInfo.next ? '400' : '700',
-        position: 'relative', zIndex: 1
-      }}>
-        {rankInfo.next ? `${totalCount} / ${rankInfo.next} to ${rankInfo.nextRank}` : '★ Maximum rank achieved — S-Class Hunter'}
-      </p>
-    </div>
-  );
-}
-
-function StreakCard({ streak, streakActive }: { streak: number; streakActive: boolean }) {
-  const color = streakActive ? '#f97316' : streak > 0 ? '#d29922' : '#484f58';
-  const icon = streakActive ? '🔥' : streak > 0 ? '❄️' : '💤';
   return (
     <div style={{
-      background: 'linear-gradient(135deg, #161b22 0%, #0d1117 100%)',
-      border: `1px solid ${color}40`,
-      borderRadius: '16px',
-      padding: '24px',
-      position: 'relative',
-      overflow: 'hidden',
+      background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, padding: '10px 12px',
+      display: 'flex', alignItems: 'center', gap: 10,
     }}>
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '2px', background: `linear-gradient(90deg, transparent, ${color}, transparent)` }} />
-      <p style={{ color: '#484f58', fontSize: '9px', fontFamily: 'monospace', textTransform: 'uppercase', letterSpacing: '0.1em', margin: '0 0 16px 0' }}>DAILY STREAK</p>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
-        <span style={{ fontSize: '48px', filter: streakActive ? 'drop-shadow(0 0 12px #f97316)' : 'none' }}>{icon}</span>
-        <p style={{ color, fontFamily: 'monospace', fontWeight: '900', fontSize: '42px', margin: 0, lineHeight: 1, textShadow: streakActive ? `0 0 16px ${color}` : 'none' }}>{streak}</p>
+      <div style={{
+        width: 32, height: 32, borderRadius: 8, background: config.bg, border: `1px solid ${config.border}`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', color: config.color, fontWeight: 800, fontFamily: MONO, flexShrink: 0,
+      }}>
+        {config.label}
       </div>
-      <p style={{ color: '#8b949e', fontSize: '12px', margin: 0, fontFamily: 'monospace' }}>
-        {streakActive ? `${streak} day${streak === 1 ? '' : 's'} on fire` : streak > 0 ? 'complete quests to continue streak' : 'complete all quests to start'}
-      </p>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ color: MUTED, fontSize: 9, fontFamily: MONO }}>QUEST #{String(index + 1).padStart(4, '0')} · {problem.review_count}×</div>
+        <div style={{ color: TEXT, fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{problem.title}</div>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+        <div style={{ fontFamily: MONO, fontSize: 10, color: overdue.urgent ? GOLD : overdue.color }}>{overdue.text}</div>
+        <button onClick={onStart} style={{ background: config.bg, border: `1px solid ${config.border}`, color: config.color, padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Start</button>
+      </div>
     </div>
-  );
+  )
 }
 
-export default function DashboardClient({ shownProblems, queueCount, recentProblems, dailyCommitment, isBacklogged, totalCount, streak, streakActive }: Props) {
-  const totalReviewed = recentProblems.reduce((a, p) => a + (p.review_count ?? 0), 0);
-  const rankInfo = getRankInfo(totalCount);
-  const rankProgress = getRankProgress(totalCount);
-  const completionPct = shownProblems.length === 0 ? 100 : Math.round((dailyCommitment - shownProblems.length) / dailyCommitment * 100);
+// FSRS-recommended next quest — the landing preview right-column panel
+function NextQuestPanel({ problem }: { problem: Problem | undefined }) {
+  if (!problem) {
+    return (
+      <div style={{ background: `linear-gradient(135deg, ${CARD}, ${BG})`, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 14 }}>
+        <div style={{ color: MUTED, fontSize: 9, fontFamily: MONO, letterSpacing: '0.1em', marginBottom: 8 }}>NEXT QUEST · FSRS</div>
+        <div style={{ fontSize: 24 }}>✨</div>
+        <div style={{ color: TEXT, fontWeight: 700, fontSize: 14, marginTop: 6 }}>All quests complete</div>
+        <div style={{ color: SUBTEXT, fontSize: 12, marginTop: 4, lineHeight: 1.5 }}>Solve problems on LeetCode to open the next portal.</div>
+      </div>
+    )
+  }
+  const config = getDifficultyConfig(problem.difficulty);
+  const overdue = daysOverdue(problem.next_review_date);
+  return (
+    <div style={{ background: `linear-gradient(135deg, ${CARD}, ${BG})`, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ color: MUTED, fontSize: 9, fontFamily: MONO, letterSpacing: '0.1em' }}>NEXT QUEST · FSRS</div>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <div style={{
+          width: 40, height: 40, borderRadius: 10, background: config.bg, border: `1px solid ${config.border}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', color: config.color, fontWeight: 900, fontFamily: MONO, fontSize: 18, flexShrink: 0, boxShadow: `0 0 20px ${config.glow}`,
+        }}>
+          {config.label}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ color: TEXT, fontSize: 13, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{problem.title}</div>
+          <div style={{ fontFamily: MONO, fontSize: 10, color: overdue.urgent ? GOLD : SUBTEXT, marginTop: 3 }}>
+            {overdue.urgent ? 'RECOMMENDED NOW — recall dropping' : overdue.text}
+          </div>
+        </div>
+      </div>
+      <a
+        href={problem.leetcode_url}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{ background: config.bg, border: `1px solid ${config.border}`, color: config.color, padding: '9px 14px', borderRadius: 10, fontSize: 12, fontWeight: 700, textDecoration: 'none', textAlign: 'center' }}
+      >
+        Start quest →
+      </a>
+    </div>
+  )
+}
+
+// Streak status — matches the landing preview's STREAK STATUS panel
+function StreakStatusPanel({ streak, streakActive }: { streak: number; streakActive: boolean }) {
+  const color = streakActive ? GOLD : streak > 0 ? SUBTEXT : MUTED;
+  const icon = streakActive ? '🔥' : streak > 0 ? '❄️' : '💤';
+  const label = streakActive ? 'KEEP IT ALIVE' : streak > 0 ? 'STREAK DORMANT' : 'SOLVE TODAY';
+  return (
+    <div style={{
+      background: `linear-gradient(135deg, ${CARD}, ${BG})`, border: `1px solid ${color}40`, borderRadius: 14, padding: 14,
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    }}>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <span style={{ fontSize: 24 }}>{icon}</span>
+        <div>
+          <div style={{ color: MUTED, fontSize: 9, fontFamily: MONO, letterSpacing: '0.1em', marginBottom: 3 }}>STREAK STATUS</div>
+          <div style={{ color, fontFamily: MONO, fontWeight: 800, fontSize: 20, lineHeight: 1 }}>{streak} days {streakActive ? 'on fire' : 'saved'}</div>
+        </div>
+      </div>
+      <div style={{ fontFamily: MONO, fontSize: 9, color: MUTED, letterSpacing: '0.1em' }}>{label}</div>
+    </div>
+  )
+}
+
+// --- NEW: the coding-streak heatmap, the signature visual from the reference ---
+// Renders a GitHub-style contribution grid from REAL activityData passed in
+// (see page.tsx for the query that builds this) - no fabricated activity.
+function CodingStreakHeatmap({ activityData, currentStreak, longestStreak }: {
+  activityData: ActivityDay[]; currentStreak: number; longestStreak: number
+}) {
+  const countByDate = new Map(activityData.map(d => [d.date, d.count]));
+  const totalSolved = activityData.reduce((sum, d) => sum + d.count, 0);
+
+  // Build the last ~26 weeks (182 days) as a week-by-week grid, Sunday-start
+  const today = new Date();
+  const daysToShow = 182;
+  const start = new Date(today);
+  start.setDate(start.getDate() - daysToShow);
+  start.setDate(start.getDate() - start.getDay()); // align to Sunday
+
+  const weeks: { date: Date; count: number }[][] = [];
+  const cursor = new Date(start);
+  while (cursor <= today) {
+    const week: { date: Date; count: number }[] = [];
+    for (let d = 0; d < 7; d++) {
+      const key = localDateStr(cursor);
+      week.push({ date: new Date(cursor), count: countByDate.get(key) ?? 0 });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    weeks.push(week);
+  }
+
+  const maxCount = Math.max(1, ...activityData.map(d => d.count));
+  const cellColor = (count: number) => {
+    if (count === 0) return CARD;
+    const intensity = Math.min(1, count / maxCount);
+    if (intensity < 0.25) return '#0d3a5f';
+    if (intensity < 0.5) return '#155a8a';
+    if (intensity < 0.75) return '#1f7fbf';
+    return BLUE;
+  };
+
+  // Month labels: mark the first week column that enters a new month
+  const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const monthLabels: { weekIndex: number; label: string }[] = [];
+  let lastMonth = -1;
+  weeks.forEach((week, i) => {
+    const m = week[0].date.getMonth();
+    if (m !== lastMonth) {
+      monthLabels.push({ weekIndex: i, label: MONTH_NAMES[m] });
+      lastMonth = m;
+    }
+  });
+
+  const CELL = 15;
+  const GAP = 4;
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0d1117', color: '#e6edf3', display: 'flex', fontFamily: '"JetBrains Mono", "Fira Code", "SF Mono", monospace' }}>
+    <div style={{ background: `linear-gradient(135deg, ${CARD}, ${BG})`, border: `1px solid ${BORDER}`, borderRadius: 16, padding: 20 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+        <div>
+          <div style={{ color: TEXT, fontWeight: 800, fontSize: 17 }}>Coding Streak</div>
+          <div style={{ color: SUBTEXT, fontSize: 12, marginTop: 2 }}>{totalSolved} solutions in the last 6 months</div>
+        </div>
+        <div style={{ display: 'flex', gap: 20 }}>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ color: BLUE, fontWeight: 800, fontSize: 18, fontFamily: MONO }}>{currentStreak}d</div>
+            <div style={{ color: MUTED, fontSize: 10, fontFamily: MONO }}>CURRENT</div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ color: PURPLE, fontWeight: 800, fontSize: 18, fontFamily: MONO }}>{longestStreak}d</div>
+            <div style={{ color: MUTED, fontSize: 10, fontFamily: MONO }}>LONGEST</div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ marginTop: 16, overflowX: 'auto' }}>
+        {/* Month labels row */}
+        <div style={{ display: 'flex', gap: GAP, marginBottom: 4, marginLeft: 28 }}>
+          {weeks.map((_, i) => {
+            const label = monthLabels.find(m => m.weekIndex === i)?.label;
+            return <div key={i} style={{ width: CELL, fontSize: 10, color: MUTED, fontFamily: MONO }}>{label ?? ''}</div>;
+          })}
+        </div>
+        {/* Grid */}
+        <div style={{ display: 'flex', gap: GAP }}>
+          {/* Day labels */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: GAP, marginRight: 4, fontSize: 10, color: MUTED, fontFamily: MONO }}>
+            <div style={{ height: CELL }}>Mo</div>
+            <div style={{ height: CELL }} />
+            <div style={{ height: CELL }}>We</div>
+            <div style={{ height: CELL }} />
+            <div style={{ height: CELL }}>Fr</div>
+            <div style={{ height: CELL }} />
+            <div style={{ height: CELL }} />
+          </div>
+          {/* Weeks */}
+          {weeks.map((week, wi) => (
+            <div key={wi} style={{ display: 'flex', flexDirection: 'column', gap: GAP }}>
+              {week.map((day, di) => (
+                <div
+                  key={di}
+                  title={`${localDateStr(day.date)}: ${day.count} solved`}
+                  style={{ width: CELL, height: CELL, borderRadius: 3, background: cellColor(day.count) }}
+                />
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6, marginTop: 12 }}>
+        <span style={{ color: MUTED, fontSize: 11, fontFamily: MONO }}>Less</span>
+        {[CARD, '#0d3a5f', '#155a8a', '#1f7fbf', BLUE].map(c => (
+          <div key={c} style={{ width: CELL, height: CELL, borderRadius: 3, background: c }} />
+        ))}
+        <span style={{ color: MUTED, fontSize: 11, fontFamily: MONO }}>More</span>
+      </div>
+    </div>
+  )
+}
+
+export default function DashboardClient({
+  shownProblems, queueCount, recentProblems, dailyCommitment, isBacklogged,
+  totalCount, streak, longestStreak, streakActive, activityData, userName,
+}: Props) {
+  const totalReviewed = recentProblems.reduce((a, p) => a + (p.review_count ?? 0), 0);
+  const rankInfo = getRankInfo(totalCount);
+  const completionPct = shownProblems.length === 0 ? 100 : Math.round((dailyCommitment - shownProblems.length) / dailyCommitment * 100);
+  const [showNotifications, setShowNotifications] = useState(false);
+
+  // Check for stale streak on mount (user missed a day → reset to 0)
+  useEffect(() => {
+    fetch('/api/check-streak', { method: 'POST' }).catch(() => {})
+  }, [])
+
+  return (
+    <div style={{ minHeight: '100vh', background: BG, color: TEXT, fontFamily: "Inter, system-ui, sans-serif" }}>
       <style jsx global>{`
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
         @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
-        @keyframes glowPulse { 0%, 100% { box-shadow: 0 0 12px rgba(56,139,253,0.3); } 50% { box-shadow: 0 0 24px rgba(56,139,253,0.5); } }
-        @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
       `}</style>
 
-      <main style={{ flex: 1, minHeight: '100vh', padding: '24px 28px 40px' }}>
+      <main style={{ padding: 24, position: 'relative' }}>
+        <ParticlesBg color="rgba(88,166,255,0.08)" count={30} />
+
         {/* Top bar */}
-        <div style={{
-          height: '60px', background: 'rgba(13,17,23,0.95)', backdropFilter: 'blur(20px)',
-          borderBottom: '1px solid #21262d', display: 'flex', alignItems: 'center',
-          justifyContent: 'space-between', padding: '0 28px', position: 'sticky', top: 0,
-          zIndex: 10, flexShrink: 0
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ width: '4px', height: '24px', background: 'linear-gradient(180deg, #388bfd, #a78bfa)', borderRadius: '2px' }} />
-            <h1 style={{ color: '#e6edf3', fontSize: '17px', fontWeight: '700', margin: 0, letterSpacing: '-0.3px' }}>Hunter Dashboard</h1>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: '10px',
-              background: 'rgba(22,27,34,0.8)', border: '1px solid #21262d',
-              borderRadius: '10px', padding: '8px 16px', width: '220px'
-            }}>
-              <span style={{ color: '#484f58', fontSize: '13px' }}>🔍</span>
-              <span style={{ color: '#484f58', fontSize: '12px', flex: 1 }}>Search database...</span>
-              <kbd style={{ background: '#0d1117', border: '1px solid #21262d', borderRadius: '4px', padding: '2px 6px', fontSize: '9px', color: '#484f58', fontFamily: 'monospace' }}>⌘K</kbd>
-            </div>
-            <div style={{
-              width: '38px', height: '38px', background: 'rgba(22,27,34,0.8)',
-              border: '1px solid #21262d', borderRadius: '10px', display: 'flex',
-              alignItems: 'center', justifyContent: 'center'
-            }}>
-              <span style={{ fontSize: '16px' }}>H</span>
+        <div style={{ height: 60, display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, position: 'relative' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ width: 4, height: 28, background: GRADIENT, borderRadius: 2 }} />
+            <div>
+              <div style={{ color: MUTED, fontSize: 9, fontFamily: MONO, letterSpacing: '0.14em', textTransform: 'uppercase' }}>DSA Master · {rankInfo.rank}</div>
+              <h1 style={{ margin: '2px 0 0', fontSize: 17 }}>Hunter Dashboard</h1>
             </div>
           </div>
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', position: 'relative', overflow: 'hidden', paddingTop: '20px' }}>
-        <div style={{ flex: 1, padding: '24px 28px', position: 'relative', overflow: 'hidden' }}>
-          <ParticlesBg color="rgba(88,166,255,0.08)" count={30} />
-          <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '1400px', margin: '0 auto', width: '100%' }}>
-
-            {/* Backlog alert */}
-            {isBacklogged && (
-              <div style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                background: 'linear-gradient(135deg, rgba(210,153,34,0.1) 0%, rgba(210,153,34,0.03) 100%)',
-                border: '1px solid rgba(210,153,34,0.3)', borderRadius: '14px',
-                padding: '18px 24px', animation: 'float 3s ease-in-out infinite',
-                boxShadow: '0 0 24px rgba(210,153,34,0.1)'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                  <div style={{
-                    width: '44px', height: '44px', borderRadius: '12px',
-                    background: 'rgba(210,153,34,0.15)', display: 'flex',
-                    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                    boxShadow: '0 0 16px rgba(210,153,34,0.2)'
-                  }}>
-                    <span style={{ fontSize: '18px', animation: 'pulse 1.5s ease-in-out infinite' }}>⚠</span>
-                  </div>
-                  <div>
-                    <p style={{ color: '#d29922', fontSize: '14px', fontWeight: '700', margin: '0 0 4px 0' }}>{queueCount} quests awaiting review</p>
-                    <p style={{ color: '#a67c00', fontSize: '12px', margin: 0, maxWidth: '400px' }}>Uncompleted quests have surpassed their 24h deadline. Clear backlog before adding new problems.</p>
-                  </div>
-                </div>
-                <button style={{
-                  background: 'rgba(210,153,34,0.15)', border: '1px solid rgba(210,153,34,0.4)',
-                  borderRadius: '8px', padding: '10px 22px', color: '#d29922',
-                  fontSize: '12px', fontWeight: '700', cursor: 'pointer',
-                  whiteSpace: 'nowrap', transition: 'all 0.2s',
-                  boxShadow: '0 0 12px rgba(210,153,34,0.15)'
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            <div style={{ position: 'relative' }}>
+              <button
+                onClick={() => setShowNotifications(!showNotifications)}
+                style={{
+                  width: 38, height: 38, borderRadius: 10,
+                  background: showNotifications ? 'rgba(88,166,255,0.12)' : 'rgba(22,27,34,0.8)',
+                  border: `1px solid ${showNotifications ? `${BLUE}40` : BORDER}`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 15, cursor: 'pointer', position: 'relative',
                 }}
-                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(210,153,34,0.25)'; e.currentTarget.style.boxShadow = '0 0 20px rgba(210,153,34,0.3)'; }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(210,153,34,0.15)'; e.currentTarget.style.boxShadow = '0 0 12px rgba(210,153,34,0.15)'; }}
               >
-                Start Clearing →
+                🔔
+                {shownProblems.length > 0 && (
+                  <div style={{
+                    position: 'absolute', top: -3, right: -3,
+                    width: 16, height: 16, borderRadius: 999,
+                    background: GOLD, color: BG,
+                    fontSize: 9, fontWeight: 800, fontFamily: MONO,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    {shownProblems.length}
+                  </div>
+                )}
               </button>
-              </div>
-            )}
 
-            {/* Main grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '20px', alignItems: 'start' }}>
-
-              {/* Left column */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-
-                {/* Profile Summary Card */}
-                <div style={{ position: 'relative', borderRadius: '16px', overflow: 'hidden' }}>
-                  <ParticlesBg color="rgba(56,139,253,0.06)" count={25} />
-                  <div style={{ position: 'relative', zIndex: 1, padding: '28px' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '28px', alignItems: 'center' }}>
-                      {/* Rank badge */}
-                      <div style={{
-                        background: 'linear-gradient(135deg, #0d1117 0%, #161b22 100%)',
-                        border: `1px solid ${rankInfo.border}`, borderRadius: '14px',
-                        padding: '24px', textAlign: 'center', position: 'relative',
-                        boxShadow: `0 0 24px ${rankInfo.glow}, inset 0 0 24px ${rankInfo.color}10`
-                      }}>
-                        <p style={{ color: '#484f58', fontSize: '10px', fontFamily: 'monospace', letterSpacing: '0.12em', textTransform: 'uppercase', margin: '0 0 8px 0' }}>RANK</p>
-                        <p style={{ color: rankInfo.color, fontSize: '52px', fontWeight: '900', margin: '0 0 4px 0', lineHeight: 1, fontFamily: 'monospace', textShadow: `0 0 16px ${rankInfo.color}` }}>{rankInfo.label}</p>
-                        <p style={{ color: rankInfo.color, fontSize: '12px', fontFamily: 'monospace', margin: 0, fontWeight: '600' }}>{rankInfo.rank}</p>
-                      </div>
-                      {/* Progress stats */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                        <div>
-                          <p style={{ color: '#484f58', fontSize: '9px', fontFamily: 'monospace', textTransform: 'uppercase', letterSpacing: '0.1em', margin: '0 0 4px 0' }}>PROFILE SUMMARY</p>
-                          <p style={{ color: '#e6edf3', fontSize: '22px', fontWeight: '800', margin: '0 0 16px 0', letterSpacing: '-0.4px', background: 'linear-gradient(90deg, #e6edf3, #58a6ff)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>Hunter Profile</p>
-                        </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-                          <StatCard label="Tracked" value={recentProblems.length} color="#58a6ff" icon="📊" prefix="" suffix="" />
-                          <StatCard label="Reviews" value={totalReviewed} color="#a78bfa" icon="🔄" prefix="" suffix="" />
-                          <StatCard label="Today's Progress" value={`${completionPct}%`} color={completionPct === 100 ? '#3fb950' : '#d29922'} icon={completionPct === 100 ? '✅' : '⏳'} prefix="" suffix="" />
-                        </div>
-                      </div>
+              {showNotifications && (
+                <>
+                  <div onClick={() => setShowNotifications(false)} style={{ position: 'fixed', inset: 0, zIndex: 99 }} />
+                  <div style={{
+                    position: 'absolute', top: 'calc(100% + 8px)', right: 0, width: 320,
+                    background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12,
+                    boxShadow: '0 8px 32px rgba(0,0,0,0.4)', zIndex: 100, overflow: 'hidden',
+                  }}>
+                    <div style={{ padding: '14px 16px', borderBottom: `1px solid ${BORDER}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ fontWeight: 700, fontSize: 14 }}>Notifications</div>
+                      <div style={{ color: MUTED, fontSize: 11, fontFamily: MONO }}>Today</div>
                     </div>
-                  </div>
-                </div>
-
-                {/* Daily Quests */}
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '16px' }}>
-                    <div>
-                      <h2 style={{ color: '#e6edf3', fontSize: '17px', fontWeight: '800', margin: '0 0 4px 0', letterSpacing: '-0.3px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{ fontSize: '18px' }}>📋</span> Daily Quests
-                      </h2>
-                      <p style={{ color: '#8b949e', fontSize: '12px', margin: 0 }}>Active portals in your vicinity</p>
-                    </div>
-                    {queueCount > 0 && (
-                      <button style={{ background: 'none', border: 'none', color: '#58a6ff', fontSize: '12px', cursor: 'pointer', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 8px', borderRadius: '6px', transition: 'all 0.15s' }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(88,166,255,0.1)'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'none'}
-                      >
-                        View all →
-                      </button>
-                    )}
-                  </div>
-
-                  {shownProblems.length === 0 ? (
-                    <div style={{
-                      background: 'linear-gradient(135deg, #161b22 0%, #0d1117 100%)',
-                      border: '1px dashed #21262d', borderRadius: '14px',
-                      padding: '56px 32px', textAlign: 'center', position: 'relative',
-                      overflow: 'hidden'
-                    }}>
-                      <div style={{ position: 'absolute', top: '20px', right: '20px', width: '100px', height: '100px', background: 'radial-gradient(circle, rgba(88,166,255,0.1) 0%, transparent 70%)', borderRadius: '50%', pointerEvents: 'none' }} />
-                      <div style={{ position: 'relative', zIndex: 1 }}>
-                        <p style={{ fontSize: '40px', margin: '0 0 14px 0', animation: 'float 3s ease-in-out infinite' }}>✨</p>
-                        <p style={{ color: '#8b949e', fontSize: '16px', fontWeight: '700', margin: '0 0 6px 0' }}>All quests complete</p>
-                        <p style={{ color: '#484f58', fontSize: '13px', margin: 0, maxWidth: '320px', marginLeft: 'auto', marginRight: 'auto' }}>No reviews due. Solve problems on LeetCode to queue new quests.</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }}>
-                      {shownProblems.map((p, i) => (
-                        <QuestCard key={p.id} problem={p} index={i} onStart={() => window.open(p.leetcode_url, '_blank')} />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Right column — Stats & Info */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', position: 'sticky', top: '80px' }}>
-                
-                {/* Performance Stats */}
-                <div style={{
-                  background: 'linear-gradient(135deg, #161b22 0%, #0d1117 100%)',
-                  border: '1px solid #21262d', borderRadius: '16px', padding: '24px',
-                  position: 'relative', overflow: 'hidden'
-                }}>
-                  <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '2px', background: 'linear-gradient(90deg, transparent, #58a6ff, transparent)' }} />
-                  <p style={{ color: '#e6edf3', fontSize: '14px', fontWeight: '700', margin: '0 0 20px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '16px' }}>📈</span> Performance
-                  </p>
-                  
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
-                    <StatCard label="Due Today" value={`${shownProblems.length} / ${dailyCommitment}`} color="#58a6ff" icon="📅" />
-                    <StatCard label="In Queue" value={`${queueCount} pending`} color={queueCount > 0 ? '#d29922' : '#3fb950'} icon="⏳" />
-                  </div>
-                  
-                  <StatCard label="Total Tracked" value={`${totalCount} problems`} color="#a78bfa" icon="🎯" />
-                  
-                  <div style={{ borderTop: '1px solid #21262d', paddingTop: '16px', marginTop: '8px' }}>
-                    <p style={{ color: '#484f58', fontSize: '9px', fontFamily: 'monospace', margin: '0 0 4px 0' }}>Shadow-OS v1.0.1</p>
-                    <p style={{ color: '#484f58', fontSize: '9px', fontFamily: 'monospace', margin: 0 }}>Server: IN-Delhi-01 · Uptime: 99.9%</p>
-                  </div>
-                </div>
-
-                {/* Rank Card */}
-                <RankDisplay rankInfo={rankInfo} totalCount={totalCount} rankProgress={rankProgress} />
-
-                {/* Streak Card */}
-                <StreakCard streak={streak} streakActive={streakActive} />
-
-                {/* Quest Board */}
-                <div style={{
-                  background: 'linear-gradient(135deg, #161b22 0%, #0d1117 100%)',
-                  border: '1px solid #21262d', borderRadius: '16px', overflow: 'hidden',
-                  position: 'relative'
-                }}>
-                  <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '2px', background: 'linear-gradient(90deg, transparent, #a78bfa, transparent)' }} />
-                  <div style={{ padding: '16px 20px', borderBottom: '1px solid #21262d' }}>
-                    <p style={{ color: '#e6edf3', fontSize: '13px', fontWeight: '700', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontSize: '15px' }}>🏆</span> Quest Board
-                    </p>
-                  </div>
-                  {recentProblems.length === 0 ? (
-                    <div style={{ padding: '28px 20px', textAlign: 'center' }}>
-                      <p style={{ color: '#484f58', fontSize: '13px', margin: 0 }}>No problems tracked yet</p>
-                    </div>
-                  ) : (
-                    recentProblems.slice(0, 8).map((p, i) => {
-                      const config = getDifficultyConfig(p.difficulty);
-                      return (
-                        <div key={p.id} style={{
-                          display: 'flex', alignItems: 'center', gap: '12px',
-                          padding: '12px 20px', borderBottom: i < recentProblems.length - 1 ? '1px solid #21262d' : 'none',
-                          transition: 'background 0.15s'
-                        }}>
-                          <div style={{
-                            width: '28px', height: '28px', borderRadius: '8px',
-                            background: config.bg, border: `1px solid ${config.border}`,
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            flexShrink: 0, boxShadow: `0 0 8px ${config.glow}`
-                          }}>
-                            <span style={{ color: config.color, fontWeight: '800', fontSize: '11px' }}>{config.label}</span>
+                    <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+                      {shownProblems.length > 0 ? (
+                        <>
+                          <div style={{ padding: '10px 16px', background: `${GOLD}08`, borderBottom: `1px solid ${BORDER}` }}>
+                            <div style={{ color: GOLD, fontSize: 10, fontWeight: 700, fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                              {shownProblems.length} review{shownProblems.length !== 1 ? 's' : ''} due today
+                            </div>
                           </div>
-                          <span style={{
-                            color: '#8b949e', fontSize: '13px',
-                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1
-                          }}>{p.title}</span>
-                          <span style={{ color: '#484f58', fontSize: '10px', fontFamily: 'monospace' }}>{p.review_count}×</span>
+                          {shownProblems.map(p => {
+                            const config = getDifficultyConfig(p.difficulty)
+                            return (
+                              <a
+                                key={p.id}
+                                href={p.leetcode_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={() => setShowNotifications(false)}
+                                style={{
+                                  display: 'flex', alignItems: 'center', gap: 10,
+                                  padding: '10px 16px', borderBottom: `1px solid ${BORDER}`,
+                                  textDecoration: 'none', transition: 'background 0.1s',
+                                }}
+                                onMouseEnter={e => (e.currentTarget.style.background = `${BLUE}08`)}
+                                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                              >
+                                <div style={{
+                                  width: 26, height: 26, borderRadius: 6, flexShrink: 0,
+                                  background: config.bg, border: `1px solid ${config.border}`,
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                }}>
+                                  <span style={{ color: config.color, fontSize: 10, fontWeight: 800, fontFamily: MONO }}>{config.label}</span>
+                                </div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ color: TEXT, fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.title}</div>
+                                  <div style={{ color: MUTED, fontSize: 10, fontFamily: MONO, marginTop: 1 }}>{p.review_count}× reviewed</div>
+                                </div>
+                              </a>
+                            )
+                          })}
+                        </>
+                      ) : (
+                        <div style={{ padding: 28, textAlign: 'center' }}>
+                          <div style={{ fontSize: 20, marginBottom: 6 }}>✨</div>
+                          <div style={{ color: SUBTEXT, fontSize: 12 }}>No notifications for today</div>
                         </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
+                      )}
+
+                      {!streakActive && streak > 0 && (
+                        <div style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div style={{ fontSize: 16 }}>⚠️</div>
+                          <div>
+                            <div style={{ color: GOLD, fontSize: 12, fontWeight: 600 }}>Streak at risk</div>
+                            <div style={{ color: MUTED, fontSize: 11, fontFamily: MONO }}>{streak}d streak · solve something today</div>
+                          </div>
+                        </div>
+                      )}
+                      {streakActive && (
+                        <div style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div style={{ fontSize: 16 }}>🔥</div>
+                          <div>
+                            <div style={{ color: GREEN, fontSize: 12, fontWeight: 600 }}>Streak active</div>
+                            <div style={{ color: MUTED, fontSize: 11, fontFamily: MONO }}>{streak}d and counting</div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+            <div style={{
+              width: 38, height: 38, borderRadius: '50%',
+              background: `${rankInfo.color}20`, border: `1px solid ${rankInfo.border}`,
+              boxShadow: `0 0 16px ${rankInfo.glow}`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', color: rankInfo.color, fontWeight: 800, fontSize: 12,
+            }}>
+              {userName.split(' ').map(n => n[0]).slice(0, 2).join('')}
             </div>
           </div>
         </div>
-      </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, position: 'relative' }}>
+          {isBacklogged && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(210,153,34,0.06)', border: '1px solid rgba(210,153,34,0.18)', borderRadius: 12, padding: '12px 16px' }}>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(210,153,34,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>⚠</div>
+                <div>
+                  <div style={{ color: GOLD, fontWeight: 700 }}>{queueCount} quests awaiting you</div>
+                  <div style={{ color: '#a67c00', fontSize: 13 }}>{queueCount} uncompleted algorithm{queueCount === 1 ? '' : 's'} have surpassed their 24h deadline.</div>
+                </div>
+              </div>
+              <button style={{ border: '1px solid rgba(210,153,34,0.22)', background: 'transparent', color: GOLD, padding: '8px 16px', borderRadius: 10, cursor: 'pointer' }}>Start now</button>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            <RankProfileCard
+              rankInfo={rankInfo}
+              userName={userName}
+              totalCount={totalCount}
+              totalReviewed={totalReviewed}
+              completionPct={completionPct}
+            />
+            <CodingStreakHeatmap activityData={activityData} currentStreak={streak} longestStreak={longestStreak} />
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+            {/* LEFT COLUMN */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+                  <div>
+                    <div style={{ fontSize: 17, fontWeight: 800 }}>Daily Quests</div>
+                    <div style={{ color: SUBTEXT, fontSize: 12 }}>Active portals in your vicinity</div>
+                  </div>
+                  {queueCount > 0 && <button style={{ background: 'none', border: 'none', color: BLUE, cursor: 'pointer', fontSize: 13 }}>View all →</button>}
+                </div>
+
+                {shownProblems.length === 0 ? (
+                  <div style={{ padding: 36, textAlign: 'center', border: `1px dashed ${BORDER}`, borderRadius: 12 }}>
+                    <div style={{ fontSize: 36 }}>✨</div>
+                    <div style={{ fontWeight: 700, marginTop: 8 }}>All quests complete</div>
+                    <div style={{ color: MUTED, fontSize: 13 }}>No reviews due. Solve problems on LeetCode to queue new quests.</div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {shownProblems.map((p, i) => <QuestRow key={p.id} problem={p} index={i} onStart={() => window.open(p.leetcode_url, '_blank')} />)}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ background: `linear-gradient(135deg, ${CARD}, ${BG})`, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 14 }}>
+                <div style={{ fontWeight: 700, marginBottom: 10, fontSize: 13 }}>Performance</div>
+                <div className="grid grid-cols-3 gap-2">
+                  <Chip label="DUE TODAY" value={`${shownProblems.length} / ${dailyCommitment}`} color={BLUE} />
+                  <Chip label="IN QUEUE" value={String(queueCount)} color={queueCount > 0 ? GOLD : GREEN} />
+                  <Chip label="TOTAL" value={String(totalCount)} color={PURPLE} />
+                </div>
+              </div>
+
+              <div style={{ borderRadius: 12, border: `1px solid ${BORDER}`, overflow: 'hidden' }}>
+                <div style={{ padding: 12, borderBottom: `1px solid ${BORDER}`, fontWeight: 700, fontSize: 13 }}>Quest Board</div>
+                {recentProblems.length === 0 ? (
+                  <div style={{ padding: 18, textAlign: 'center', color: MUTED, fontSize: 13 }}>No problems tracked yet</div>
+                ) : (
+                  recentProblems.slice(0, 8).map((p) => (
+                    <div key={p.id} style={{ display: 'flex', gap: 12, padding: 12, alignItems: 'center', borderBottom: `1px solid ${BORDER}` }}>
+                      <div style={{ width: 28, height: 28, borderRadius: 8, background: getDifficultyConfig(p.difficulty).bg, border: `1px solid ${getDifficultyConfig(p.difficulty).border}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <span style={{ color: getDifficultyConfig(p.difficulty).color, fontWeight: 800, fontFamily: MONO, fontSize: 12 }}>{getDifficultyConfig(p.difficulty).label}</span>
+                      </div>
+                      <div style={{ color: SUBTEXT, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13 }}>{p.title}</div>
+                      <div style={{ color: MUTED, fontFamily: MONO, fontSize: 11 }}>{p.review_count}×</div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* RIGHT COLUMN */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <NextQuestPanel problem={shownProblems[0]} />
+              <StreakStatusPanel streak={streak} streakActive={streakActive} />
+            </div>
+          </div>
+        </div>
       </main>
     </div>
   )

@@ -11,7 +11,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ questio
 
   const { data: problem } = await supabase
     .from('problems')
-    .select('*')
+    .select('id, title, difficulty, leetcode_url, stability, review_count, last_reviewed_at, next_review_date')
     .eq('id', questionId)
     .eq('user_id', user.id)
     .single()

@@ -10,9 +10,28 @@ export default async function SettingsPage() {
 
   const { data: settings } = await supabase
     .from('user_settings')
-    .select('api_token')
+    .select('api_token, username, daily_commitment')
     .eq('user_id', user.id)
     .single()
 
-  return <SettingsClient apiToken={settings?.api_token ?? ''} />
+  const { count: totalCount } = await supabase
+    .from('problems')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', user.id)
+
+  const userName = settings?.username ?? user.email?.split('@')[0] ?? 'Hunter'
+  const memberSince = user.created_at
+    ? new Date(user.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short' })
+    : '—'
+
+  return (
+    <SettingsClient
+      apiToken={settings?.api_token ?? ''}
+      userName={userName}
+      email={user.email ?? ''}
+      memberSince={memberSince}
+      totalCount={totalCount ?? 0}
+      dailyCommitment={settings?.daily_commitment ?? 5}
+    />
+  )
 }

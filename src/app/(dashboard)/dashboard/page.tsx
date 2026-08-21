@@ -2,6 +2,10 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import DashboardClient from "./DashboardClient";
 
+function localDateStr(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 export default async function DashboardPage() {
   const supabase = await createClient();
 
@@ -10,11 +14,11 @@ export default async function DashboardPage() {
 
   const { data: settings } = await supabase
     .from("user_settings")
-    .select("daily_commitment, current_streak, last_streak_date")
+    .select("daily_commitment, current_streak, longest_streak, last_activity_date, username")
     .eq("user_id", user.id)
     .single();
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = localDateStr(new Date());
 
   const { data: dueProblems } = await supabase
     .from("problems")
@@ -44,6 +48,54 @@ export default async function DashboardPage() {
     .select("*", { count: "exact", head: true })
     .eq("user_id", user.id);
 
+  // Activity data for the coding-streak heatmap — only qualifying days light up.
+  // A day counts as "active" when:
+  //   1. The user completed at least one review (review_logs entry), OR
+  //   2. The user solved a new problem AND had zero problems due that day
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+  // Reviews completed in the last 6 months
+  const { data: reviewRows } = await supabase
+    .from("review_logs")
+    .select("reviewed_at")
+    .eq("user_id", user.id)
+    .gte("reviewed_at", sixMonthsAgo.toISOString());
+
+  // Problems created in the last 6 months (for new-problem qualifying check)
+  const { data: problemRows } = await supabase
+    .from("problems")
+    .select("created_at, next_review_date")
+    .eq("user_id", user.id)
+    .gte("created_at", sixMonthsAgo.toISOString());
+
+  const activityCounts = new Map<string, number>();
+
+  // Count review completions by local date
+  (reviewRows ?? []).forEach((row) => {
+    const d = new Date(row.reviewed_at);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    activityCounts.set(key, (activityCounts.get(key) ?? 0) + 1);
+  });
+
+  // For new problems: only count on days where nothing was due for review
+  const dueByDate = new Map<string, number>();
+  (problemRows ?? []).forEach((p) => {
+    if (p.next_review_date) {
+      dueByDate.set(p.next_review_date, (dueByDate.get(p.next_review_date) ?? 0) + 1);
+    }
+  });
+  (problemRows ?? []).forEach((p) => {
+    const d = new Date(p.created_at);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    // Only count if there were zero problems due for review that day
+    if ((dueByDate.get(key) ?? 0) === 0) {
+      activityCounts.set(key, (activityCounts.get(key) ?? 0) + 1);
+    }
+  });
+
+  const activityData = Array.from(activityCounts.entries()).map(([date, count]) => ({ date, count }));
+
   const dailyCommitment = settings?.daily_commitment ?? 5;
   const due = dueProblems ?? [];
   const shown = due.slice(0, dailyCommitment);
@@ -51,8 +103,13 @@ export default async function DashboardPage() {
   const isBacklogged = queueCount >= dailyCommitment;
 
   const streak = settings?.current_streak ?? 0;
-  const lastStreakDate = settings?.last_streak_date ?? null;
-  const streakActive = lastStreakDate === today;
+  const longestStreak = settings?.longest_streak ?? 0;
+  const lastActivityDate = settings?.last_activity_date ?? null;
+  const streakActive = lastActivityDate === today;
+
+  // Display name: prefer the editable name stored in user_settings
+  // (edited from the Settings page), falling back to auth metadata then email.
+  const userName = settings?.username ?? user.user_metadata?.full_name ?? user.user_metadata?.name ?? user.email?.split("@")[0] ?? "Hunter";
 
   return (
     <DashboardClient
@@ -63,7 +120,10 @@ export default async function DashboardPage() {
       isBacklogged={isBacklogged}
       totalCount={totalCount ?? 0}
       streak={streak}
+      longestStreak={longestStreak}
       streakActive={streakActive}
+      activityData={activityData}
+      userName={userName}
     />
   );
 }

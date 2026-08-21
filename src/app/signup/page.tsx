@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import OTPInput from '@/components/OTPInput'
 
@@ -138,8 +139,8 @@ const DiscordIcon = () => (
 export default function SignupPage() {
   const router = useRouter()
   const supabase = createClient()
-
-  // ---------- form fields ----------
+  const searchParams = useSearchParams()
+  const [mounted, setMounted] = useState(false)
   const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -187,6 +188,12 @@ export default function SignupPage() {
     setStep('otp')
   }
 
+  useEffect(() => {
+    // trigger entrance animations after mount
+    const id = requestAnimationFrame(() => setMounted(true))
+    return () => cancelAnimationFrame(id)
+  }, [])
+
   // ---------- Step 2: verify OTP ----------
   async function verifyOtp(code: string) {
     setLoading(true)
@@ -225,7 +232,7 @@ export default function SignupPage() {
         .auth-page { min-height: 100vh; display: flex; background: #0b0c10; font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; overflow: hidden; }
         
         .auth-left { 
-          width: 50%; 
+          width: 65%; 
           position: relative; 
           background-color: #080a0f;
           background-image: 
@@ -238,6 +245,15 @@ export default function SignupPage() {
           justify-content: space-between; 
           padding: 48px 64px; 
           z-index: 1; 
+        }
+        .auth-left::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          background-image: radial-gradient(closest-side, rgba(0,0,0,0) 60%, rgba(0,0,0,0.25)), repeating-linear-gradient(transparent, transparent 59px, rgba(255,255,255,0.01) 60px);
+          mix-blend-mode: overlay;
+          z-index: 1;
         }
         
         .auth-right { flex: 1; display: flex; align-items: center; justify-content: center; padding: 40px; background: #0b0d12; position: relative; z-index: 1; }
@@ -257,11 +273,17 @@ export default function SignupPage() {
         .auth-stat-label { color: #8b949e; font-size: 12px; }
 
         .auth-badges { display: flex; flex-wrap: wrap; gap: 12px; }
-        .auth-badge { background: #12151a; border: 1px solid #21262d; border-radius: 20px; padding: 6px 14px; color: #c9d1d9; font-size: 11px; font-weight: 500; display: flex; align-items: center; gap: 6px; }
+        .auth-badge { background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border: 1px solid rgba(255,255,255,0.03); border-radius: 20px; padding: 8px 14px; color: #dce9f8; font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 8px; backdrop-filter: blur(6px); box-shadow: 0 8px 24px rgba(30, 50, 80, 0.25); }
+        .auth-badge span { display: inline-flex; width: 18px; height: 18px; align-items: center; justify-content: center; border-radius: 6px; background: rgba(255,255,255,0.02); }
 
         .auth-footer-note { position: relative; z-index: 2; color: #484f58; font-size: 11px; font-family: "Geist Mono", "SF Mono", "Fira Code", monospace; }
 
         .auth-form-wrap { width: 100%; max-width: 380px; position: relative; z-index: 2; }
+        /* Entrance transitions */
+        .auth-page .auth-hero, .auth-page .auth-badges, .auth-page .auth-stats { transform: translateY(10px); opacity: 0; transition: transform 600ms cubic-bezier(.2,.9,.2,1), opacity 600ms ease; }
+        .auth-page .auth-form-wrap { transform: translateY(10px); opacity: 0; transition: transform 600ms cubic-bezier(.2,.9,.2,1), opacity 600ms ease; }
+        .auth-page.mounted .auth-hero, .auth-page.mounted .auth-badges, .auth-page.mounted .auth-stats { transform: none; opacity: 1; }
+        .auth-page.mounted .auth-form-wrap { transform: none; opacity: 1; }
 
         .auth-tabs { display: flex; background: #080a0f; border: 1px solid #1a1d24; border-radius: 10px; padding: 4px; margin-bottom: 40px; }
         .auth-tab { flex: 1; text-align: center; padding: 10px; border-radius: 6px; font-size: 13px; font-weight: 500; color: #6e7681; text-decoration: none; transition: color 0.2s; cursor: pointer; background: none; border: none; }
@@ -277,6 +299,9 @@ export default function SignupPage() {
         .auth-input { width: 100%; background: #12151a; border: 1px solid #21262d; border-radius: 8px; padding: 12px 14px 12px 42px; font-size: 14px; color: #ffffff; outline: none; transition: border-color 0.2s; font-family: inherit; }
         .auth-input::placeholder { color: #484f58; }
         .auth-input:focus { border-color: #4db8ff; }
+
+        /* subtle glow around focused input */
+        .auth-input:focus { box-shadow: 0 6px 24px rgba(77,184,255,0.06); }
 
         .auth-commitment-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
         .auth-commitment-btn { padding: 8px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s; background: #12151a; border: 1px solid #21262d; color: #6e7681; font-family: inherit; }
@@ -305,7 +330,7 @@ export default function SignupPage() {
       {/* eslint-disable-next-line @next/next/no-page-custom-font */}
       <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
-      <div className="auth-page">
+      <div className={`auth-page${mounted ? ' mounted' : ''}`}>
         {/* ═══════ LEFT PANEL ═══════ */}
         <div className="auth-left">
           <CornerParticles />
@@ -363,7 +388,7 @@ export default function SignupPage() {
 
             {/* Tabs */}
             <div className="auth-tabs">
-              <a href="/login" className="auth-tab">Sign In</a>
+              <a href="/login" className="auth-tab" onClick={(e) => { e.preventDefault(); router.push('/login') }}>Sign In</a>
               <div className="auth-tab-active">Create Account</div>
             </div>
 
@@ -372,24 +397,24 @@ export default function SignupPage() {
             {/* ===================================================== */}
             {step === 'form' && (
               <>
-                <h2 className="auth-heading">Create your account</h2>
-                <p className="auth-subheading">Free forever. Start your DSA journey today.</p>
+                <h2 className="auth-heading">Join the System</h2>
+                <p className="auth-subheading">Create your hunter profile to get started</p>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', marginBottom: '24px' }}>
                   {/* Username */}
                   <div>
-                    <label className="auth-field-label">Username</label>
+                    <label className="auth-field-label">Hunter Name</label>
                     <div className="auth-input-wrap">
-                      <UserIcon />
-                      <input className="auth-input" type="text" placeholder="shadowhunter" value={username} onChange={e => setUsername(e.target.value)} />
+                      <span className="auth-input-icon"><UserIcon /></span>
+                      <input className="auth-input" type="text" placeholder="Sung Jin-Woo" value={username} onChange={e => setUsername(e.target.value)} />
                     </div>
                   </div>
 
                   {/* Email */}
                   <div>
-                    <label className="auth-field-label">Email address</label>
+                    <label className="auth-field-label">Email</label>
                     <div className="auth-input-wrap">
-                      <MailIcon />
+                      <span className="auth-input-icon"><MailIcon /></span>
                       <input className="auth-input" type="email" placeholder="hunter@system.io" value={email} onChange={e => setEmail(e.target.value)} />
                     </div>
                   </div>
@@ -398,8 +423,8 @@ export default function SignupPage() {
                   <div>
                     <label className="auth-field-label">Password</label>
                     <div className="auth-input-wrap">
-                      <LockIcon />
-                      <input className="auth-input" type="password" placeholder="••••••••••••" value={password} onChange={e => setPassword(e.target.value)} />
+                      <span className="auth-input-icon"><LockIcon /></span>
+                      <input className="auth-input" type="password" placeholder="min. 8 characters" value={password} onChange={e => setPassword(e.target.value)} />
                     </div>
                   </div>
 
@@ -424,7 +449,7 @@ export default function SignupPage() {
                 </button>
 
                 <p className="auth-footer-link">
-                  Already have an account? <a href="/login">Sign in</a>
+                  Already have an account? <a href="/login" onClick={(e) => { e.preventDefault(); router.push('/login') }}>Sign in</a>
                 </p>
               </>
             )}
@@ -454,13 +479,13 @@ export default function SignupPage() {
               </>
             )}
 
-            <div className="auth-divider">
+            {/* <div className="auth-divider">
               <div className="auth-divider-line" />
               <span className="auth-divider-text">or continue with</span>
               <div className="auth-divider-line" />
-            </div>
+            </div> */}
 
-            <div className="auth-social-grid">
+            {/* <div className="auth-social-grid">
               {[
                 { name: 'GitHub', icon: <GitHubIcon /> },
                 { name: 'Google', icon: <GoogleIcon /> },
@@ -470,7 +495,7 @@ export default function SignupPage() {
                   {p.icon} {p.name}
                 </button>
               ))}
-            </div>
+            </div> */}
           </div>
         </div>
       </div>

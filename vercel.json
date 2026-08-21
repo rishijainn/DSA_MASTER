@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/notifications/review-reminder",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/notifications/streak-nudge",
+      "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/notifications/weekly-summary",
+      "schedule": "0 4 * * 0"
+    }
+  ]
+}

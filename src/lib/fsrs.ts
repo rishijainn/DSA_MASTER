@@ -11,6 +11,10 @@ interface FSRSOutput {
   nextReviewDate: string
 }
 
+function localDateStr(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 export function calculateNextReview({ stability, feltDifficulty, hintUsed }: FSRSInput): FSRSOutput {
   let newStability = stability
 
@@ -33,7 +37,7 @@ export function calculateNextReview({ stability, feltDifficulty, hintUsed }: FSR
 
   return {
     newStability,
-    nextReviewDate: nextReviewDate.toISOString().split('T')[0]
+    nextReviewDate: localDateStr(nextReviewDate)
   }
 }
 
@@ -43,12 +47,20 @@ export async function findAvailableDate(
   userId: string,
   dailyCommitment: number,
   supabase: any,
-  excludeProblemId?: string
+  excludeProblemId?: string,
+  skipToday?: boolean
 ): Promise<string> {
-  let date = new Date(idealDate)
+  let date = new Date(idealDate + 'T12:00:00')
+
+  if (skipToday) {
+    const today = localDateStr(new Date())
+    if (localDateStr(date) <= today) {
+      date.setDate(date.getDate() + 1)
+    }
+  }
 
   for (let i = 0; i < 30; i++) {
-    const dateStr = date.toISOString().split('T')[0]
+    const dateStr = localDateStr(date)
 
     let query = supabase
       .from('problems')

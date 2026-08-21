@@ -20,7 +20,21 @@ function getGFGDifficulty() {
     return 'medium'
 }
 
+function isRejected(node) {
+    const text = node?.textContent?.trim() ?? ''
+    return (
+        text.includes('Wrong Answer') ||
+        text.includes('Time Limit Exceeded') ||
+        text.includes('Runtime Error') ||
+        text.includes('Compilation Error') ||
+        text.includes('Test Cases Failed') ||
+        text.includes('Failed') ||
+        text.includes('Incorrect')
+    )
+}
+
 function isAccepted(node) {
+    if (isRejected(node)) return false
     const text = node?.textContent?.trim() ?? ''
     return (
         text === 'Problem Solved Successfully' ||
@@ -160,6 +174,15 @@ function createPopup(slug) {
 function watchForAccepted(slug) {
     const observer = new MutationObserver(() => {
         if (popupShown) return
+
+        // Check if GFG's own failure/error popup is visible — if so, skip
+        const allText = document.body.innerText ?? ''
+        if (
+            allText.includes('Wrong Answer') ||
+            allText.includes('Time Limit Exceeded') ||
+            allText.includes('Runtime Error') ||
+            allText.includes('Compilation Error')
+        ) return
 
         const allEls = document.querySelectorAll('div, p, span, h4, h3')
         for (const el of allEls) {

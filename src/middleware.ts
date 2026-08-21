@@ -50,5 +50,6 @@ export const config = {
     "/add-question/:path*",
     "/review/:path*",
     "/settings/:path*",
+    "/discover/:path*",
   ],
 };

@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { calculateNextReview, findAvailableDate } from '@/lib/fsrs'
 import { corsHeaders, handleOptions } from '@/lib/cors'
+import { updateStreak } from '@/lib/streak'
 
 export async function OPTIONS() {
   return handleOptions()
@@ -34,11 +35,14 @@ export async function POST(request: NextRequest) {
     const dailyCommitment = settings.daily_commitment ?? 5
 
     const body = await request.json()
-    const { slug, url, title, hint_used, felt_difficulty, difficulty } = body
+    const { slug, url: rawUrl, title, hint_used, felt_difficulty, difficulty } = body
 
-    if (!slug || !url || !title || hint_used === undefined || !felt_difficulty || !difficulty) {
+    if (!slug || !rawUrl || !title || hint_used === undefined || !felt_difficulty || !difficulty) {
       return NextResponse.json({ error: 'Missing fields' }, { status: 400, headers: corsHeaders() })
     }
+
+    // strip /submissions/... path so we always store the clean problem page URL
+    const url = rawUrl.replace(/\/submissions\/.*$/, '/')
 
     // check if problem already exists
     const { data: existing } = await supabase
@@ -82,6 +86,9 @@ export async function POST(request: NextRequest) {
         felt_difficulty
       })
 
+      // Re-solve of existing problem = review → always check streak
+      await updateStreak(userId, supabase)
+
       return NextResponse.json({ success: true, next_review_date: nextReviewDate }, { headers: corsHeaders() })
     }
 
@@ -96,7 +103,9 @@ export async function POST(request: NextRequest) {
       idealDate,
       userId,
       dailyCommitment,
-      supabase
+      supabase,
+      undefined,
+      true
     )
 
     const { error: insertError } = await supabase.from('problems').insert({
@@ -116,6 +125,10 @@ export async function POST(request: NextRequest) {
     if (insertError) {
       return NextResponse.json({ error: insertError.message }, { status: 500, headers: corsHeaders() })
     }
+
+    // New problem → streak only counts if zero reviews were due today.
+    // updateStreak checks this internally (dueCount vs todayReviews).
+    await updateStreak(userId, supabase)
 
     return NextResponse.json({ success: true, next_review_date: nextReviewDate }, { headers: corsHeaders() })
   } catch {

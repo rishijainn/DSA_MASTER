@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
 /* ──────────────────────────── Corner Constellations ──────────────────────────── */
@@ -138,6 +139,7 @@ const DiscordIcon = () => (
 export default function LoginPage() {
   const router = useRouter()
   const supabase = createClient()
+  const searchParams = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -183,9 +185,20 @@ export default function LoginPage() {
       // Store session in Supabase client so subsequent client-side calls are authenticated`
       if (json.session) {
         await supabase.auth.setSession(json.session)
-      }
 
-      router.push('/dashboard')
+        // Verify client-side session was applied. If not, force a full reload
+        try {
+          const { data: userData } = await supabase.auth.getUser()
+          if (userData?.user) {
+            router.push('/dashboard')
+          } else {
+            // fallback to full navigation to ensure server cookies are sent
+            window.location.href = '/dashboard'
+          }
+        } catch (e) {
+          window.location.href = '/dashboard'
+        }
+      }
 
 
     } catch (err: any) {
@@ -203,7 +216,7 @@ export default function LoginPage() {
         .auth-page { min-height: 100vh; display: flex; background: #0b0c10; font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; overflow: hidden; }
         
         .auth-left { 
-          width: 50%; 
+          width: 65%; 
           position: relative; 
           background-color: #080a0f;
           background-image: 
@@ -339,7 +352,7 @@ export default function LoginPage() {
             {/* Tabs */}
             <div className="auth-tabs">
               <div className="auth-tab-active">Sign In</div>
-              <a href="/signup" className="auth-tab">Create Account</a>
+              <a href="/signup" className="auth-tab" onClick={(e) => { e.preventDefault(); router.push('/signup') }}>Create Account</a>
             </div>
 
             <h2 className="auth-heading">Welcome back</h2>
@@ -373,13 +386,13 @@ export default function LoginPage() {
               {loading ? 'Signing in...' : 'Sign In →'}
             </button>
 
-            <div className="auth-divider">
+            {/* <div className="auth-divider">
               <div className="auth-divider-line" />
               <span className="auth-divider-text">or continue with</span>
               <div className="auth-divider-line" />
-            </div>
+            </div> */}
 
-            <div className="auth-social-grid">
+            {/* <div className="auth-social-grid">
               {[
                 { name: 'GitHub', icon: <GitHubIcon /> },
                 { name: 'Google', icon: <GoogleIcon /> },
@@ -389,10 +402,10 @@ export default function LoginPage() {
                   {p.icon} {p.name}
                 </button>
               ))}
-            </div>
+            </div> */}
 
             <p className="auth-footer-link">
-              Don&apos;t have an account? <a href="/signup">Sign up</a>
+              Don&apos;t have an account? <a href="/signup" onClick={(e) => { e.preventDefault(); router.push('/signup') }}>Sign up</a>
             </p>
           </div>
         </div>
