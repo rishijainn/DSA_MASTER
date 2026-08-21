@@ -179,9 +179,9 @@ export default function SettingsClient({
               <div style={{
                 position: 'absolute', bottom: -2, right: -2,
                 width: 16, height: 16, borderRadius: 999,
-                background: extensionConnected ? GREEN : apiToken ? GOLD : MUTED,
+                background: extensionConnected ? GREEN : apiToken ? GOLD : RED,
                 border: `2.5px solid ${CARD}`,
-                boxShadow: extensionConnected ? `0 0 6px ${GREEN}88` : 'none',
+                boxShadow: extensionConnected ? `0 0 6px ${GREEN}88` : apiToken ? `0 0 6px ${GOLD}66` : `0 0 6px ${RED}66`,
               }} />
             </div>
 
@@ -243,12 +243,12 @@ export default function SettingsClient({
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
                     <div style={{
                       width: 7, height: 7, borderRadius: 999,
-                      background: extensionConnected ? GREEN : apiToken ? GOLD : MUTED,
+                      background: extensionConnected ? GREEN : apiToken ? GOLD : RED,
                       boxShadow: extensionConnected ? `0 0 6px ${GREEN}` : 'none',
                       animation: extensionConnected ? 'pulse 2s ease-in-out infinite' : 'none',
                     }} />
                     <span style={{ color: SUBTEXT, fontSize: 12, fontFamily: MONO }}>
-                      {extensionConnected ? 'Synced with extension' : apiToken ? 'Token set — extension idle' : 'Not configured'}
+                      {extensionConnected ? 'Synced with extension' : apiToken ? 'Token set — extension idle' : 'Extension not connected'}
                     </span>
                   </div>
                 </div>
@@ -451,7 +451,7 @@ export default function SettingsClient({
         }}>
           <div style={{
             width: 6, height: 6, borderRadius: 999,
-            background: extensionConnected ? GREEN : apiToken ? GOLD : MUTED,
+            background: extensionConnected ? GREEN : apiToken ? GOLD : RED,
             boxShadow: extensionConnected ? `0 0 6px ${GREEN}66` : 'none',
           }} />
           <span style={{ color: MUTED, fontSize: 12, fontFamily: MONO }}>
