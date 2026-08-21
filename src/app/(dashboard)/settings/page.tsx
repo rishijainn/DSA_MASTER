@@ -21,7 +21,7 @@ export default async function SettingsPage() {
 
   const extensionConnected = Boolean(settings?.extension_connected)
 
-  const userName = settings?.username ?? user.email?.split('@')[0] ?? 'Hunter'
+  const userName = settings?.username ?? user.email?.split('@')[0] ?? 'Coder'
   const memberSince = user.created_at
     ? new Date(user.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short' })
     : '—'

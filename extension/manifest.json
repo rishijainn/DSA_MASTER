@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "DSA Shadow",
+  "name": "DSA Master",
   "version": "1.0.0",
   "description": "Track your LeetCode and GFG submissions with spaced repetition",
   "permissions": [
@@ -28,6 +28,6 @@
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "DSA Shadow"
+    "default_title": "DSA Master"
   }
 }

@@ -63,7 +63,7 @@ export default function Sidebar() {
             S
           </div>
           <div>
-            <p style={{ color: '#e6edf3', fontSize: '14px', fontWeight: '700', margin: '0 0 2px 0', letterSpacing: '-0.2px' }}>DSA Shadow</p>
+            <p style={{ color: '#e6edf3', fontSize: '14px', fontWeight: '700', margin: '0 0 2px 0', letterSpacing: '-0.2px' }}>DSA Master</p>
             <p style={{ color: '#58a6ff', fontSize: '10px', margin: 0, fontFamily: 'monospace' }}>Protected workspace</p>
           </div>
         </div>

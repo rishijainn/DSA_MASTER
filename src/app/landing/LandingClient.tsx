@@ -406,7 +406,7 @@ function Hero() {
                 }}
               >
                 <span style={{ width: 6, height: 6, borderRadius: 999, background: BLUE, display: 'inline-block' }} />
-                Chrome Extension · Hunter Rank System
+                Chrome Extension · Rank System
               </span>
             </motion.div>
 
@@ -431,7 +431,7 @@ function Hero() {
               style={{ margin: 0, color: SUBTEXT, fontSize: 17, lineHeight: 1.6, maxWidth: 480 }}
             >
               DSA Master turns every LeetCode session into an RPG run — auto-tracked
-              hints and attempts, FSRS-ranked reviews, and a Hunter Rank (S/A/B) that
+              hints and attempts, FSRS-ranked reviews, and a Rank (S/A/B) that
               reflects how you actually solve, not how you say you grind.
             </motion.p>
 
@@ -589,7 +589,7 @@ function DashboardPreview() {
                     letterSpacing: '0.06em',
                   }}
                 >
-                  hunter-dashboard — DSA Master
+                  dashboard — DSA Master
                 </span>
               </div>
 
@@ -840,7 +840,7 @@ const STEPS = [
   },
   {
     num: '02',
-    title: 'Create your Hunter profile',
+    title: 'Create your profile',
     desc: 'Sign in once. Your profile starts climbing the moment you do.',
     color: PURPLE,
     tag: 'SIGN IN',
@@ -1002,7 +1002,7 @@ const FEATURES = [
   },
   {
     icon: '⚔️',
-    eyebrow: 'Hunter Rank',
+    eyebrow: 'Rank System',
     title: 'Rank up on real solves.',
     desc: 'S. A. B. Your tier is earned from real solving activity, not self-reported streaks. Every accepted solution pushes you toward the next rank.',
     color: RED,
@@ -1153,7 +1153,7 @@ function FinalCTA() {
         </FadeUp>
         <FadeUp delay={0.12}>
           <p style={{ margin: '18px auto 0', maxWidth: 460, color: SUBTEXT, fontSize: 16, lineHeight: 1.6 }}>
-            Install DSA Master and turn the grind into a game. Your hunter rank is
+            Install DSA Master and turn the grind into a game. Your rank is
             waiting — and it only climbs if you actually solve.
           </p>
         </FadeUp>

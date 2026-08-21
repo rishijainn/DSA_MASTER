@@ -337,7 +337,7 @@ export default function SignupClient() {
 
           <div className="auth-logo">
             <div className="auth-logo-icon">★</div>
-            <span className="auth-logo-text">Hunter System</span>
+            <span className="auth-logo-text">DSA Master</span>
           </div>
 
           <div className="auth-hero">
@@ -348,12 +348,12 @@ export default function SignupClient() {
             </h1>
             <p className="auth-hero-desc">
               Track algorithms, complete quests, and rise through the ranks.
-              Your path to becoming an S-Rank Hunter starts here.
+              Your path to becoming an S-Rank coder starts here.
             </p>
 
             <div className="auth-stats">
               {[
-                { n: '48K+', label: 'Hunters' },
+                { n: '48K+', label: 'Coders' },
                 { n: '1,200+', label: 'Quests' },
                 { n: '99.8%', label: 'Uptime' },
               ].map(s => (
@@ -403,7 +403,7 @@ export default function SignupClient() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', marginBottom: '24px' }}>
                   {/* Username */}
                   <div>
-                    <label className="auth-field-label">Hunter Name</label>
+                    <label className="auth-field-label">Username</label>
                     <div className="auth-input-wrap">
                       <span className="auth-input-icon"><UserIcon /></span>
                       <input className="auth-input" type="text" placeholder="Sung Jin-Woo" value={username} onChange={e => setUsername(e.target.value)} />

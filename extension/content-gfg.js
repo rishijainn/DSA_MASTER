@@ -68,7 +68,7 @@ function createPopup(slug) {
 
     popup.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-      <p style="font-size:14px;font-weight:700">DSA Shadow</p>
+      <p style="font-size:14px;font-weight:700">DSA Master</p>
       <button id="dsa-close" style="background:none;border:none;color:#71717a;cursor:pointer;font-size:16px">✕</button>
     </div>
     <p style="font-size:13px;color:#a1a1aa;margin-bottom:16px">Nice solve! Log <strong style="color:white">${titleFromSlug(slug)}</strong> to your tracker?</p>

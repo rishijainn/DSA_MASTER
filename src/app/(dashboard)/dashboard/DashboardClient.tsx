@@ -387,7 +387,7 @@ export default function DashboardClient({
             <div style={{ width: 4, height: 28, background: GRADIENT, borderRadius: 2 }} />
             <div>
               <div style={{ color: MUTED, fontSize: 9, fontFamily: MONO, letterSpacing: '0.14em', textTransform: 'uppercase' }}>DSA Master · {rankInfo.rank}</div>
-              <h1 style={{ margin: '2px 0 0', fontSize: 17 }}>Hunter Dashboard</h1>
+              <h1 style={{ margin: '2px 0 0', fontSize: 17 }}>Dashboard</h1>
             </div>
           </div>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>

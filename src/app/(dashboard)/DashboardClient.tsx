@@ -297,7 +297,7 @@ export default function DashboardClient({ shownProblems, queueCount, recentProbl
               >
                 S
               </motion.div>
-              <h3 style={{ color: '#e6edf3', fontSize: 18, fontWeight: 600, margin: '0 0 4px 0', letterSpacing: '-0.2px' }}>Hunter</h3>
+              <h3 style={{ color: '#e6edf3', fontSize: 18, fontWeight: 600, margin: '0 0 4px 0', letterSpacing: '-0.2px' }}>Coder</h3>
               <p style={{ color: '#8892b0', fontSize: 11, margin: 0, fontFamily: 'monospace' }}>v4.0.1</p>
             </motion.div>
 
@@ -351,7 +351,7 @@ export default function DashboardClient({ shownProblems, queueCount, recentProbl
             >
               {[
                 { path: '/dashboard', label: 'Dashboard', icon: '����' },
-                { path: '/history', label: 'Hunter Quests', icon: '����' },
+                { path: '/history', label: 'Quest History', icon: '����' },
                 { path: '/skills', label: 'Skill Library', icon: '����' },
                 { path: '/tracking', label: 'Portal Tracking', icon: '����' },
                 { path: '/shop', label: 'System Shop', icon: '����' },
@@ -449,8 +449,8 @@ export default function DashboardClient({ shownProblems, queueCount, recentProbl
               transition={{ delay: 0.3, duration: 0.5 }}
             >
               <div>
-                <motion.h1 style={{ color: '#e6edf3', fontSize: 30, fontWeight: 800, letterSpacing: '-0.4px', margin: '0 0 4px 0' }} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>Hunter Dashboard</motion.h1>
-                <motion.p style={{ color: '#8892b0', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.15em', margin: 0, fontFamily: 'monospace' }} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}>v4.0.1 · S-Class Hunter</motion.p>
+                <motion.h1 style={{ color: '#e6edf3', fontSize: 30, fontWeight: 800, letterSpacing: '-0.4px', margin: '0 0 4px 0' }} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>Dashboard</motion.h1>
+                <motion.p style={{ color: '#8892b0', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.15em', margin: 0, fontFamily: 'monospace' }} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}>v4.0.1 · S-Class Coder</motion.p>
               </div>
               <motion.div style={{ display: 'flex', alignItems: 'center', gap: 16 }} initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}>
                 <input

@@ -82,7 +82,7 @@ export default async function DashboardPage() {
 
   // Display name: prefer the editable name stored in user_settings
   // (edited from the Settings page), falling back to auth metadata then email.
-  const userName = settings?.username ?? user.user_metadata?.full_name ?? user.user_metadata?.name ?? user.email?.split("@")[0] ?? "Hunter";
+  const userName = settings?.username ?? user.user_metadata?.full_name ?? user.user_metadata?.name ?? user.email?.split("@")[0] ?? "Coder";
 
   return (
     <DashboardClient
