@@ -25,13 +25,19 @@ export default function ResetPasswordPage() {
 
   useEffect(() => {
     const supabase = createClient()
+    const href = window.location.href
+    console.log('[RESET] Full URL:', href)
+    console.log('[RESET] Search:', window.location.search)
+    console.log('[RESET] Hash:', window.location.hash)
 
     // New PKCE flow: token comes as ?code= in query params
-    const url = new URL(window.location.href)
+    const url = new URL(href)
     const code = url.searchParams.get('code')
     if (code) {
+      console.log('[RESET] Found code, exchanging...')
       supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
-        if (error) { setHashError('Link expired or invalid. Request a new one.'); return }
+        if (error) { console.log('[RESET] Exchange error:', error.message); setHashError('Link expired or invalid. Request a new one.'); return }
+        console.log('[RESET] Success!')
         setReady(true)
       })
       return
@@ -40,6 +46,7 @@ export default function ResetPasswordPage() {
     // Legacy hash flow: access_token + refresh_token in hash fragment
     const hash = window.location.hash
     if (hash) {
+      console.log('[RESET] Found hash, parsing...')
       const params = new URLSearchParams(hash.substring(1))
       const accessToken = params.get('access_token')
       const refreshToken = params.get('refresh_token')
@@ -48,13 +55,15 @@ export default function ResetPasswordPage() {
           access_token: accessToken,
           refresh_token: refreshToken,
         }).then(({ error }) => {
-          if (error) { setHashError('Link expired or invalid. Request a new one.'); return }
+          if (error) { console.log('[RESET] Session error:', error.message); setHashError('Link expired or invalid. Request a new one.'); return }
+          console.log('[RESET] Success via hash!')
           setReady(true)
         })
         return
       }
     }
 
+    console.log('[RESET] No code or hash found')
     setHashError('Invalid reset link. Request a new one.')
   }, [])
 
