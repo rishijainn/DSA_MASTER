@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { createClient } from '@supabase/supabase-js'
 
 const BG = '#0d1117'
 const CARD = '#161b22'
@@ -10,9 +10,22 @@ const TEXT = '#e6edf3'
 const SUBTEXT = '#8b949e'
 const MUTED = '#484f58'
 const BLUE = '#58a6ff'
-const RED = '#f85149'
 const GREEN = '#3fb950'
+const RED = '#f85149'
 const MONO = "var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace"
+
+function getSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      auth: {
+        flowType: 'pkce',
+        storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+      },
+    }
+  )
+}
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
@@ -24,7 +37,7 @@ export default function ForgotPasswordPage() {
     if (!email.trim()) { setError('Enter your email'); return }
     setLoading(true)
     setError('')
-    const supabase = createClient()
+    const supabase = getSupabase()
     const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim(), {
       redirectTo: `${window.location.origin}/reset-password`,
     })
@@ -53,7 +66,7 @@ export default function ForgotPasswordPage() {
             <p style={{ color: SUBTEXT, fontSize: 13, margin: '0 0 20px', lineHeight: 1.6 }}>
               We sent a password reset link to <span style={{ color: TEXT, fontWeight: 600 }}>{email}</span>
             </p>
-            <a href="/login" style={{ color: BLUE, fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>← Back to login</a>
+            <a href="/login" style={{ color: BLUE, fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>Back to login</a>
           </div>
         ) : (
           <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 28 }}>
@@ -69,7 +82,6 @@ export default function ForgotPasswordPage() {
                   style={{
                     width: '100%', background: BG, border: `1px solid ${BORDER}`, borderRadius: 10,
                     padding: '12px 14px', color: TEXT, fontSize: 14, outline: 'none',
-                    transition: 'border-color 0.15s',
                   }}
                   onFocus={e => (e.currentTarget.style.borderColor = BLUE)}
                   onBlur={e => (e.currentTarget.style.borderColor = BORDER)}
@@ -92,7 +104,7 @@ export default function ForgotPasswordPage() {
             </div>
 
             <div style={{ textAlign: 'center', marginTop: 16 }}>
-              <a href="/login" style={{ color: SUBTEXT, fontSize: 12, textDecoration: 'none' }}>← Back to login</a>
+              <a href="/login" style={{ color: SUBTEXT, fontSize: 12, textDecoration: 'none' }}>Back to login</a>
             </div>
           </div>
         )}

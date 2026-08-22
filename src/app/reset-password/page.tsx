@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { createClient } from '@supabase/supabase-js'
 
 const BG = '#0d1117'
 const CARD = '#161b22'
@@ -14,6 +14,19 @@ const RED = '#f85149'
 const GREEN = '#3fb950'
 const MONO = "var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace"
 
+function getSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      auth: {
+        flowType: 'pkce',
+        storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+      },
+    }
+  )
+}
+
 export default function ResetPasswordPage() {
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -24,46 +37,18 @@ export default function ResetPasswordPage() {
   const [hashError, setHashError] = useState('')
 
   useEffect(() => {
-    const supabase = createClient()
-    const href = window.location.href
-    console.log('[RESET] Full URL:', href)
-    console.log('[RESET] Search:', window.location.search)
-    console.log('[RESET] Hash:', window.location.hash)
-
-    // New PKCE flow: token comes as ?code= in query params
-    const url = new URL(href)
+    const supabase = getSupabase()
+    const url = new URL(window.location.href)
     const code = url.searchParams.get('code')
+
     if (code) {
-      console.log('[RESET] Found code, exchanging...')
       supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
-        if (error) { console.log('[RESET] Exchange error:', error.message); setHashError('Link expired or invalid. Request a new one.'); return }
-        console.log('[RESET] Success!')
+        if (error) { setHashError(error.message); return }
         setReady(true)
       })
       return
     }
 
-    // Legacy hash flow: access_token + refresh_token in hash fragment
-    const hash = window.location.hash
-    if (hash) {
-      console.log('[RESET] Found hash, parsing...')
-      const params = new URLSearchParams(hash.substring(1))
-      const accessToken = params.get('access_token')
-      const refreshToken = params.get('refresh_token')
-      if (accessToken && refreshToken) {
-        supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken,
-        }).then(({ error }) => {
-          if (error) { console.log('[RESET] Session error:', error.message); setHashError('Link expired or invalid. Request a new one.'); return }
-          console.log('[RESET] Success via hash!')
-          setReady(true)
-        })
-        return
-      }
-    }
-
-    console.log('[RESET] No code or hash found')
     setHashError('Invalid reset link. Request a new one.')
   }, [])
 
@@ -72,7 +57,7 @@ export default function ResetPasswordPage() {
     if (password !== confirm) { setError('Passwords do not match'); return }
     setLoading(true)
     setError('')
-    const supabase = createClient()
+    const supabase = getSupabase()
     const { error: err } = await supabase.auth.updateUser({ password })
     setLoading(false)
     if (err) { setError(err.message); return }
@@ -101,7 +86,7 @@ export default function ResetPasswordPage() {
             <div style={{ fontSize: 36, marginBottom: 12 }}>✅</div>
             <div style={{ color: GREEN, fontWeight: 700, fontSize: 16, marginBottom: 6 }}>Password updated</div>
             <p style={{ color: SUBTEXT, fontSize: 13, margin: '0 0 20px', lineHeight: 1.6 }}>Your password has been reset successfully.</p>
-            <a href="/login" style={{ color: BLUE, fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>Sign in →</a>
+            <a href="/login" style={{ color: BLUE, fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>Sign in</a>
           </div>
         ) : !ready ? (
           <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 28, textAlign: 'center' }}>
@@ -158,7 +143,7 @@ export default function ResetPasswordPage() {
             </div>
 
             <div style={{ textAlign: 'center', marginTop: 16 }}>
-              <a href="/login" style={{ color: SUBTEXT, fontSize: 12, textDecoration: 'none' }}>← Back to login</a>
+              <a href="/login" style={{ color: SUBTEXT, fontSize: 12, textDecoration: 'none' }}>Back to login</a>
             </div>
           </div>
         )}
