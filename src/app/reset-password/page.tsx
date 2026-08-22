@@ -25,23 +25,37 @@ export default function ResetPasswordPage() {
 
   useEffect(() => {
     const supabase = createClient()
-    // Supabase sends a hash with access_token — exchange it for a session
+
+    // New PKCE flow: token comes as ?code= in query params
+    const url = new URL(window.location.href)
+    const code = url.searchParams.get('code')
+    if (code) {
+      supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
+        if (error) { setHashError('Link expired or invalid. Request a new one.'); return }
+        setReady(true)
+      })
+      return
+    }
+
+    // Legacy hash flow: access_token + refresh_token in hash fragment
     const hash = window.location.hash
-    if (!hash) { setHashError('Invalid reset link. Request a new one.'); return }
+    if (hash) {
+      const params = new URLSearchParams(hash.substring(1))
+      const accessToken = params.get('access_token')
+      const refreshToken = params.get('refresh_token')
+      if (accessToken && refreshToken) {
+        supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        }).then(({ error }) => {
+          if (error) { setHashError('Link expired or invalid. Request a new one.'); return }
+          setReady(true)
+        })
+        return
+      }
+    }
 
-    const params = new URLSearchParams(hash.substring(1))
-    const accessToken = params.get('access_token')
-    const refreshToken = params.get('refresh_token')
-
-    if (!accessToken || !refreshToken) { setHashError('Invalid reset link. Request a new one.'); return }
-
-    supabase.auth.setSession({
-      access_token: accessToken,
-      refresh_token: refreshToken,
-    }).then(({ error }) => {
-      if (error) { setHashError('Link expired or invalid. Request a new one.'); return }
-      setReady(true)
-    })
+    setHashError('Invalid reset link. Request a new one.')
   }, [])
 
   async function handleReset() {
