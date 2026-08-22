@@ -47,7 +47,7 @@ export default function Sidebar() {
           <img
             src="/logo.svg"
             alt="DSA Master"
-            style={{ height: '40px', flexShrink: 0 }}
+            style={{ height: '80px', flexShrink: 0 }}
           />
         </div>
       </div>
