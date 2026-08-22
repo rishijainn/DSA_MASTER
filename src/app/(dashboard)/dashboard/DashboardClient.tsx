@@ -24,6 +24,7 @@ interface ActivityDay {
 interface Props {
   shownProblems: Problem[]
   queueCount: number
+  overdueCount: number
   recentProblems: Problem[]
   dailyCommitment: number
   isBacklogged: boolean
@@ -32,6 +33,7 @@ interface Props {
   longestStreak: number
   streakActive: boolean
   activityData: ActivityDay[]
+  streakWindow: string[]
   userName: string
 }
 
@@ -150,7 +152,6 @@ function RankProfileCard({ rankInfo, userName, totalCount, totalReviewed, comple
 // Compact horizontal quest row — matches the landing preview's Daily Quests
 function QuestRow({ problem, index, onStart }: { problem: Problem; index: number; onStart: () => void }) {
   const config = getDifficultyConfig(problem.difficulty);
-  const overdue = daysOverdue(problem.next_review_date);
   return (
     <div style={{
       background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, padding: '10px 12px',
@@ -167,7 +168,7 @@ function QuestRow({ problem, index, onStart }: { problem: Problem; index: number
         <div style={{ color: TEXT, fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{problem.title}</div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-        <div style={{ fontFamily: MONO, fontSize: 10, color: overdue.urgent ? GOLD : overdue.color }}>{overdue.text}</div>
+        <div style={{ fontFamily: MONO, fontSize: 10, color: SUBTEXT }}>Due today</div>
         <button onClick={onStart} style={{ background: config.bg, border: `1px solid ${config.border}`, color: config.color, padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Start</button>
       </div>
     </div>
@@ -187,7 +188,6 @@ function NextQuestPanel({ problem }: { problem: Problem | undefined }) {
     )
   }
   const config = getDifficultyConfig(problem.difficulty);
-  const overdue = daysOverdue(problem.next_review_date);
   return (
     <div style={{ background: `linear-gradient(135deg, ${CARD}, ${BG})`, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div style={{ color: MUTED, fontSize: 9, fontFamily: MONO, letterSpacing: '0.1em' }}>NEXT QUEST · FSRS</div>
@@ -200,9 +200,7 @@ function NextQuestPanel({ problem }: { problem: Problem | undefined }) {
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ color: TEXT, fontSize: 13, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{problem.title}</div>
-          <div style={{ fontFamily: MONO, fontSize: 10, color: overdue.urgent ? GOLD : SUBTEXT, marginTop: 3 }}>
-            {overdue.urgent ? 'RECOMMENDED NOW — recall dropping' : overdue.text}
-          </div>
+          <div style={{ fontFamily: MONO, fontSize: 10, color: SUBTEXT, marginTop: 3 }}>Due today</div>
         </div>
       </div>
       <a
@@ -242,10 +240,11 @@ function StreakStatusPanel({ streak, streakActive }: { streak: number; streakAct
 // --- NEW: the coding-streak heatmap, the signature visual from the reference ---
 // Renders a GitHub-style contribution grid from REAL activityData passed in
 // (see page.tsx for the query that builds this) - no fabricated activity.
-function CodingStreakHeatmap({ activityData, currentStreak, longestStreak }: {
-  activityData: ActivityDay[]; currentStreak: number; longestStreak: number
+function CodingStreakHeatmap({ activityData, currentStreak, longestStreak, streakWindow }: {
+  activityData: ActivityDay[]; currentStreak: number; longestStreak: number; streakWindow: string[]
 }) {
   const countByDate = new Map(activityData.map(d => [d.date, d.count]));
+  const streakSet = new Set(streakWindow);
   const totalSolved = activityData.reduce((sum, d) => sum + d.count, 0);
 
   // Build the last ~26 weeks (182 days) as a week-by-week grid, Sunday-start
@@ -268,8 +267,13 @@ function CodingStreakHeatmap({ activityData, currentStreak, longestStreak }: {
   }
 
   const maxCount = Math.max(1, ...activityData.map(d => d.count));
-  const cellColor = (count: number) => {
-    if (count === 0) return CARD;
+  const todayStr = localDateStr(today);
+  const cellColor = (dateStr: string, count: number) => {
+    if (count === 0) {
+      // Missed day: was in streak window but no activity, and it's a past day
+      if (streakSet.has(dateStr) && dateStr < todayStr) return '#5c1d1d';
+      return CARD;
+    }
     const intensity = Math.min(1, count / maxCount);
     if (intensity < 0.25) return '#0d3a5f';
     if (intensity < 0.5) return '#155a8a';
@@ -338,7 +342,7 @@ function CodingStreakHeatmap({ activityData, currentStreak, longestStreak }: {
                 <div
                   key={di}
                   title={`${localDateStr(day.date)}: ${day.count} solved`}
-                  style={{ width: CELL, height: CELL, borderRadius: 3, background: cellColor(day.count) }}
+                  style={{ width: CELL, height: CELL, borderRadius: 3, background: cellColor(localDateStr(day.date), day.count) }}
                 />
               ))}
             </div>
@@ -351,15 +355,16 @@ function CodingStreakHeatmap({ activityData, currentStreak, longestStreak }: {
         {[CARD, '#0d3a5f', '#155a8a', '#1f7fbf', BLUE].map(c => (
           <div key={c} style={{ width: CELL, height: CELL, borderRadius: 3, background: c }} />
         ))}
-        <span style={{ color: MUTED, fontSize: 11, fontFamily: MONO }}>More</span>
+        <div style={{ width: CELL, height: CELL, borderRadius: 3, background: '#5c1d1d' }} />
+        <span style={{ color: MUTED, fontSize: 11, fontFamily: MONO }}>Missed</span>
       </div>
     </div>
   )
 }
 
 export default function DashboardClient({
-  shownProblems, queueCount, recentProblems, dailyCommitment, isBacklogged,
-  totalCount, streak, longestStreak, streakActive, activityData, userName,
+  shownProblems, queueCount, overdueCount, recentProblems, dailyCommitment, isBacklogged,
+  totalCount, streak, longestStreak, streakActive, activityData, streakWindow, userName,
 }: Props) {
   const totalReviewed = recentProblems.reduce((a, p) => a + (p.review_count ?? 0), 0);
   const rankInfo = getRankInfo(totalCount);
@@ -531,7 +536,7 @@ export default function DashboardClient({
               totalReviewed={totalReviewed}
               completionPct={completionPct}
             />
-            <CodingStreakHeatmap activityData={activityData} currentStreak={streak} longestStreak={longestStreak} />
+            <CodingStreakHeatmap activityData={activityData} currentStreak={streak} longestStreak={longestStreak} streakWindow={streakWindow} />
           </div>
 
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -541,9 +546,15 @@ export default function DashboardClient({
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
                   <div>
                     <div style={{ fontSize: 17, fontWeight: 800 }}>Daily Quests</div>
-                    <div style={{ color: SUBTEXT, fontSize: 12 }}>Active portals in your vicinity</div>
+                    <div style={{ color: SUBTEXT, fontSize: 12 }}>Problems due today</div>
                   </div>
-                  {queueCount > 0 && <button style={{ background: 'none', border: 'none', color: BLUE, cursor: 'pointer', fontSize: 13 }}>View all →</button>}
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                    {overdueCount > 0 && (
+                      <a href="/overdue" style={{ background: 'rgba(248,81,73,0.1)', border: '1px solid rgba(248,81,73,0.25)', borderRadius: 8, padding: '4px 10px', color: RED, fontSize: 12, fontWeight: 600, textDecoration: 'none', cursor: 'pointer' }}>
+                        {overdueCount} overdue →
+                      </a>
+                    )}
+                  </div>
                 </div>
 
                 {shownProblems.length === 0 ? (
@@ -563,7 +574,7 @@ export default function DashboardClient({
                 <div style={{ fontWeight: 700, marginBottom: 10, fontSize: 13 }}>Performance</div>
                 <div className="grid grid-cols-3 gap-2">
                   <Chip label="DUE TODAY" value={`${shownProblems.length} / ${dailyCommitment}`} color={BLUE} />
-                  <Chip label="IN QUEUE" value={String(queueCount)} color={queueCount > 0 ? GOLD : GREEN} />
+                  <Chip label="OVERDUE" value={String(overdueCount)} color={overdueCount > 0 ? RED : GREEN} />
                   <Chip label="TOTAL" value={String(totalCount)} color={PURPLE} />
                 </div>
               </div>

@@ -53,5 +53,6 @@ export const config = {
     "/discover/:path*",
     "/progress/:path*",
     "/history/:path*",
+    "/overdue/:path*",
   ],
 };

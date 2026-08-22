@@ -17,9 +17,10 @@ export default async function DashboardPage() {
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
   // Run all independent queries in parallel
-  const [settingsRes, dueRes, allRes, countRes, reviewRes, problemRes] = await Promise.all([
+  const [settingsRes, todayRes, overdueRes, allRes, countRes, reviewRes, problemRes] = await Promise.all([
     supabase.from("user_settings").select("daily_commitment, current_streak, longest_streak, last_activity_date, username").eq("user_id", user.id).single(),
-    supabase.from("problems").select("*").eq("user_id", user.id).lte("next_review_date", today).order("next_review_date", { ascending: true }),
+    supabase.from("problems").select("*").eq("user_id", user.id).eq("next_review_date", today).order("next_review_date", { ascending: true }),
+    supabase.from("problems").select("*", { count: "exact", head: true }).eq("user_id", user.id).lt("next_review_date", today),
     supabase.from("problems").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(10),
     supabase.from("problems").select("*", { count: "exact", head: true }).eq("user_id", user.id),
     supabase.from("review_logs").select("reviewed_at").eq("user_id", user.id).gte("reviewed_at", sixMonthsAgo.toISOString()),
@@ -27,7 +28,8 @@ export default async function DashboardPage() {
   ]);
 
   const settings = settingsRes.data;
-  const dueProblems = dueRes.data;
+  const todayProblems = todayRes.data;
+  const overdueCount = overdueRes.count ?? 0;
   const allProblems = allRes.data;
   const totalCount = countRes.count;
   const reviewRows = reviewRes.data;
@@ -70,7 +72,7 @@ export default async function DashboardPage() {
   const activityData = Array.from(activityCounts.entries()).map(([date, count]) => ({ date, count }));
 
   const dailyCommitment = settings?.daily_commitment ?? 5;
-  const due = dueProblems ?? [];
+  const due = todayProblems ?? [];
   const shown = due.slice(0, dailyCommitment);
   const queueCount = Math.max(0, due.length - dailyCommitment);
   const isBacklogged = queueCount >= dailyCommitment;
@@ -80,6 +82,20 @@ export default async function DashboardPage() {
   const lastActivityDate = settings?.last_activity_date ?? null;
   const streakActive = lastActivityDate === today;
 
+  // Compute the streak window: which days the user was "expected" to be active
+  // Missed days = days in the window with no activity
+  const streakWindow: string[] = []
+  if (lastActivityDate && streak > 0) {
+    const end = new Date(today + 'T00:00:00')
+    const start = new Date(lastActivityDate + 'T00:00:00')
+    start.setDate(start.getDate() - streak + 1)
+    const cursor = new Date(start)
+    while (cursor <= end) {
+      streakWindow.push(localDateStr(cursor))
+      cursor.setDate(cursor.getDate() + 1)
+    }
+  }
+
   // Display name: prefer the editable name stored in user_settings
   // (edited from the Settings page), falling back to auth metadata then email.
   const userName = settings?.username ?? user.user_metadata?.full_name ?? user.user_metadata?.name ?? user.email?.split("@")[0] ?? "Coder";
@@ -88,6 +104,7 @@ export default async function DashboardPage() {
     <DashboardClient
       shownProblems={shown}
       queueCount={queueCount}
+      overdueCount={overdueCount}
       recentProblems={uniqueProblems}
       dailyCommitment={dailyCommitment}
       isBacklogged={isBacklogged}
@@ -96,6 +113,7 @@ export default async function DashboardPage() {
       longestStreak={longestStreak}
       streakActive={streakActive}
       activityData={activityData}
+      streakWindow={streakWindow}
       userName={userName}
     />
   );
