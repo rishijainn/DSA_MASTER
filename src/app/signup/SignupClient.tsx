@@ -336,7 +336,7 @@ export default function SignupClient() {
           <CornerParticles />
 
           <div className="auth-logo">
-            <div className="auth-logo-icon">★</div>
+            <img src="/favicon.svg" alt="" style={{ width: 36, height: 36 }} />
             <span className="auth-logo-text">DSA Master</span>
           </div>
 

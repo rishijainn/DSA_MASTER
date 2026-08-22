@@ -44,28 +44,11 @@ export default function Sidebar() {
           }}
         />
         <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div
-            style={{
-              width: '44px',
-              height: '44px',
-              borderRadius: '12px',
-              background: 'linear-gradient(135deg, #388bfd 0%, #a78bfa 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontWeight: '800',
-              fontSize: '16px',
-              color: 'white',
-              flexShrink: 0,
-              boxShadow: '0 0 24px rgba(56,139,253,0.4), inset 0 0 24px rgba(255,255,255,0.1)',
-            }}
-          >
-            S
-          </div>
-          <div>
-            <p style={{ color: '#e6edf3', fontSize: '14px', fontWeight: '700', margin: '0 0 2px 0', letterSpacing: '-0.2px' }}>DSA Master</p>
-            <p style={{ color: '#58a6ff', fontSize: '10px', margin: 0, fontFamily: 'monospace' }}>Protected workspace</p>
-          </div>
+          <img
+            src="/logo.svg"
+            alt="DSA Master"
+            style={{ height: '40px', flexShrink: 0 }}
+          />
         </div>
       </div>
 

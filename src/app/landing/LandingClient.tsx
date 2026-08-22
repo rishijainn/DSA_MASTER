@@ -254,24 +254,7 @@ function Hero() {
               href="/"
               style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}
             >
-              <span
-                style={{
-                  width: 30,
-                  height: 30,
-                  borderRadius: 9,
-                  background: 'linear-gradient(135deg, #f8514933, #f85149)',
-                  border: '1px solid rgba(248,81,73,0.5)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#fff',
-                  fontWeight: 900,
-                  fontSize: 14,
-                  fontFamily: MONO,
-                }}
-              >
-                S
-              </span>
+              <img src="/favicon.svg" alt="" style={{ width: 30, height: 30, borderRadius: 9 }} />
               <span style={{ color: TEXT, fontWeight: 800, letterSpacing: '-0.01em' }}>DSA MASTER</span>
             </a>
           </motion.div>

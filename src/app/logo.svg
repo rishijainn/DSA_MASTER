@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="160" viewBox="0 0 600 160">
+  <title>DSA Master logo</title>
+  <defs>
+    <linearGradient id="brandD" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4C4FE0"/>
+      <stop offset="100%" stop-color="#6D3FC7"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Icon badge -->
+  <g transform="translate(0,20)">
+    <rect x="0" y="0" width="120" height="120" rx="26" fill="url(#brandD)"/>
+    <g stroke="#0A0E1A" stroke-width="4" fill="none" stroke-linecap="round" opacity="0.85">
+      <line x1="60" y1="34" x2="34" y2="66"/>
+      <line x1="60" y1="34" x2="86" y2="66"/>
+      <line x1="34" y1="66" x2="34" y2="94"/>
+      <line x1="86" y1="66" x2="86" y2="94"/>
+    </g>
+    <circle cx="60" cy="34" r="9" fill="#FFFFFF"/>
+    <circle cx="34" cy="66" r="9" fill="#FFFFFF" opacity="0.9"/>
+    <circle cx="86" cy="66" r="9" fill="#FFFFFF" opacity="0.9"/>
+    <circle cx="34" cy="94" r="7" fill="#FFFFFF" opacity="0.75"/>
+    <circle cx="86" cy="94" r="7" fill="#FFFFFF" opacity="0.75"/>
+  </g>
+
+  <!-- Wordmark -->
+  <text x="140" y="90" font-family="Inter, system-ui, sans-serif" font-size="40" font-weight="700" fill="#FFFFFF" letter-spacing="0.02em">DSA MASTER</text>
+  <text x="140" y="118" font-family="Inter, system-ui, sans-serif" font-size="13" font-weight="400" fill="#8B93A7" letter-spacing="0.1em">STOP GRINDING. START LEVELING.</text>
+</svg>
