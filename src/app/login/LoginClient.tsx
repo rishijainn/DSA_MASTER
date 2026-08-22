@@ -376,7 +376,7 @@ export default function LoginClient() {
                   <span className="auth-input-icon"><LockIcon /></span>
                   <input className="auth-input" type="password" placeholder="••••••••••••" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLogin()} />
                 </div>
-                <a href="#" className="auth-forgot">Forgot password?</a>
+                <a href="/forgot-password" className="auth-forgot">Forgot password?</a>
               </div>
             </div>
 
