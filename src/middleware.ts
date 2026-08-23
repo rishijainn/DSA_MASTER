@@ -56,7 +56,5 @@ export const config = {
     "/progress/:path*",
     "/history/:path*",
     "/overdue/:path*",
-    "/forgot-password/:path*",
-    "/reset-password/:path*",
   ],
 };
