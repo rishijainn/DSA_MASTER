@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { createClient } from '@supabase/supabase-js'
+import { createClient } from '@/lib/supabase/client'
 
 const BG = '#0d1117'
 const CARD = '#161b22'
@@ -14,19 +14,6 @@ const GREEN = '#3fb950'
 const RED = '#f85149'
 const MONO = "var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace"
 
-function getSupabase() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      auth: {
-        flowType: 'pkce',
-        storage: typeof window !== 'undefined' ? window.localStorage : undefined,
-      },
-    }
-  )
-}
-
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
@@ -37,7 +24,7 @@ export default function ForgotPasswordPage() {
     if (!email.trim()) { setError('Enter your email'); return }
     setLoading(true)
     setError('')
-    const supabase = getSupabase()
+    const supabase = createClient()
     const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim(), {
       redirectTo: `${window.location.origin}/reset-password`,
     })
