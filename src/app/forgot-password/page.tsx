@@ -15,7 +15,7 @@ const RED = '#f85149'
 const MONO = "var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace"
 
 export default function ForgotPasswordPage() {
-  const [step, setStep] = useState<'email' | 'otp'>('email')
+  const [step, setStep] = useState<'email' | 'otp' | 'password'>('email')
   const [email, setEmail] = useState('')
   const [otp, setOtp] = useState('')
   const [password, setPassword] = useState('')
@@ -28,31 +28,34 @@ export default function ForgotPasswordPage() {
     if (!email.trim()) { setError('Enter your email'); return }
     setLoading(true); setError('')
     const supabase = createClient()
-    const { error: err } = await supabase.auth.signInWithOtp({
-      email: email.trim(),
-    })
+    const { error: err } = await supabase.auth.signInWithOtp({ email: email.trim() })
     setLoading(false)
     if (err) { setError(err.message); return }
     setStep('otp')
   }
 
-  async function verifyAndReset() {
+  async function verifyOtp() {
     if (otp.length !== 6) { setError('Enter the 6-digit code'); return }
-    if (password.length < 6) { setError('Password must be at least 6 characters'); return }
-    if (password !== confirm) { setError('Passwords do not match'); return }
     setLoading(true); setError('')
     const supabase = createClient()
-
-    const { data, error: err1 } = await supabase.auth.verifyOtp({
+    const { error: err } = await supabase.auth.verifyOtp({
       email: email.trim(),
       token: otp.trim(),
       type: 'email',
     })
-    if (err1) { setLoading(false); setError(err1.message); return }
-
-    const { error: err2 } = await supabase.auth.updateUser({ password })
     setLoading(false)
-    if (err2) { setError(err2.message); return }
+    if (err) { setError(err.message); return }
+    setStep('password')
+  }
+
+  async function resetPassword() {
+    if (password.length < 6) { setError('Password must be at least 6 characters'); return }
+    if (password !== confirm) { setError('Passwords do not match'); return }
+    setLoading(true); setError('')
+    const supabase = createClient()
+    const { error: err } = await supabase.auth.updateUser({ password })
+    setLoading(false)
+    if (err) { setError(err.message); return }
     setDone(true)
   }
 
@@ -63,7 +66,9 @@ export default function ForgotPasswordPage() {
           <div style={{ color: MUTED, fontSize: 11, fontFamily: MONO, letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 10 }}>DSA Master</div>
           <h1 style={{ color: TEXT, fontSize: 24, fontWeight: 800, margin: 0, letterSpacing: '-0.3px' }}>Reset password</h1>
           <p style={{ color: SUBTEXT, fontSize: 14, margin: '8px 0 0', lineHeight: 1.5 }}>
-            {step === 'email' ? 'Enter your email to receive a reset code.' : `We sent a 6-digit code to ${email}`}
+            {step === 'email' && 'Enter your email to receive a reset code.'}
+            {step === 'otp' && `Enter the 6-digit code sent to ${email}`}
+            {step === 'password' && 'Code verified. Set your new password.'}
           </p>
         </div>
 
@@ -94,7 +99,7 @@ export default function ForgotPasswordPage() {
               <a href="/login" style={{ color: SUBTEXT, fontSize: 12, textDecoration: 'none' }}>Back to login</a>
             </div>
           </div>
-        ) : (
+        ) : step === 'otp' ? (
           <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 28 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div>
@@ -103,6 +108,20 @@ export default function ForgotPasswordPage() {
                   style={{ width: '100%', background: BG, border: `1px solid ${BORDER}`, borderRadius: 10, padding: '12px 14px', color: TEXT, fontSize: 14, outline: 'none', fontFamily: MONO, letterSpacing: '0.3em', textAlign: 'center' }}
                   onFocus={e => (e.currentTarget.style.borderColor = BLUE)} onBlur={e => (e.currentTarget.style.borderColor = BORDER)} />
               </div>
+              {error && <div style={{ color: RED, fontSize: 12, fontFamily: MONO }}>{error}</div>}
+              <button onClick={verifyOtp} disabled={loading}
+                style={{ width: '100%', padding: '12px 0', borderRadius: 10, background: BLUE, color: 'white', fontSize: 14, fontWeight: 700, border: 'none', cursor: 'pointer', opacity: loading ? 0.6 : 1 }}>
+                {loading ? 'Verifying...' : 'Verify code'}
+              </button>
+            </div>
+            <div style={{ textAlign: 'center', marginTop: 16 }}>
+              <button onClick={() => { setStep('email'); setOtp(''); setError('') }}
+                style={{ background: 'none', border: 'none', color: SUBTEXT, fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>Change email</button>
+            </div>
+          </div>
+        ) : (
+          <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 28 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div>
                 <label style={{ color: SUBTEXT, fontSize: 11, fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>New password</label>
                 <input type="password" placeholder="At least 6 characters" value={password} onChange={e => setPassword(e.target.value)}
@@ -112,18 +131,15 @@ export default function ForgotPasswordPage() {
               <div>
                 <label style={{ color: SUBTEXT, fontSize: 11, fontFamily: MONO, letterSpacing: '0.1em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Confirm password</label>
                 <input type="password" placeholder="Repeat password" value={confirm} onChange={e => setConfirm(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && verifyAndReset()}
+                  onKeyDown={e => e.key === 'Enter' && resetPassword()}
                   style={{ width: '100%', background: BG, border: `1px solid ${BORDER}`, borderRadius: 10, padding: '12px 14px', color: TEXT, fontSize: 14, outline: 'none' }}
                   onFocus={e => (e.currentTarget.style.borderColor = BLUE)} onBlur={e => (e.currentTarget.style.borderColor = BORDER)} />
               </div>
               {error && <div style={{ color: RED, fontSize: 12, fontFamily: MONO }}>{error}</div>}
-              <button onClick={verifyAndReset} disabled={loading}
+              <button onClick={resetPassword} disabled={loading}
                 style={{ width: '100%', padding: '12px 0', borderRadius: 10, background: BLUE, color: 'white', fontSize: 14, fontWeight: 700, border: 'none', cursor: 'pointer', opacity: loading ? 0.6 : 1 }}>
                 {loading ? 'Updating...' : 'Reset password'}
               </button>
-            </div>
-            <div style={{ textAlign: 'center', marginTop: 16 }}>
-              <button onClick={() => { setStep('email'); setOtp(''); setError(''); sendOtp() }} style={{ background: 'none', border: 'none', color: SUBTEXT, fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>Resend code</button>
             </div>
           </div>
         )}
