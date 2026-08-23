@@ -82,13 +82,16 @@ export default async function DashboardPage() {
   const lastActivityDate = settings?.last_activity_date ?? null;
   const streakActive = lastActivityDate === today;
 
-  // Compute the streak window: which days the user was "expected" to be active
-  // Missed days = days in the window with no activity
+  // Compute the streak window: days from last activity through today.
+  // Missed days (past days with no activity) show red in the heatmap.
   const streakWindow: string[] = []
-  if (lastActivityDate && streak > 0) {
+  if (lastActivityDate) {
     const end = new Date(today + 'T00:00:00')
     const start = new Date(lastActivityDate + 'T00:00:00')
-    start.setDate(start.getDate() - streak + 1)
+    // Cap at 30 days back from today so we don't flood with red
+    const maxStart = new Date(today + 'T00:00:00')
+    maxStart.setDate(maxStart.getDate() - 30)
+    if (start < maxStart) start.setTime(maxStart.getTime())
     const cursor = new Date(start)
     while (cursor <= end) {
       streakWindow.push(localDateStr(cursor))
