@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { sendWeeklySummaries } from '@/lib/notifications'
 
-export async function POST(request: Request) {
+async function handler(request: Request) {
   const auth = request.headers.get('authorization')
   if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -15,3 +15,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Failed to send weekly summaries' }, { status: 500 })
   }
 }
+
+export async function GET(request: Request) { return handler(request) }
+export async function POST(request: Request) { return handler(request) }
