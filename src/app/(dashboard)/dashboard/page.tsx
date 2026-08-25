@@ -23,8 +23,8 @@ export default async function DashboardPage() {
     supabase.from("problems").select("*", { count: "exact", head: true }).eq("user_id", user.id).lt("next_review_date", today),
     supabase.from("problems").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(10),
     supabase.from("problems").select("*", { count: "exact", head: true }).eq("user_id", user.id),
-    supabase.from("review_logs").select("reviewed_at").eq("user_id", user.id).gte("reviewed_at", sixMonthsAgo.toISOString()),
-    supabase.from("problems").select("created_at, next_review_date").eq("user_id", user.id).gte("created_at", sixMonthsAgo.toISOString()),
+    supabase.from("review_logs").select("reviewed_at, problem_id").eq("user_id", user.id).gte("reviewed_at", sixMonthsAgo.toISOString()),
+    supabase.from("problems").select("id, created_at, next_review_date").eq("user_id", user.id),
   ]);
 
   const settings = settingsRes.data;
@@ -46,14 +46,30 @@ export default async function DashboardPage() {
 
   const activityCounts = new Map<string, number>();
 
-  // Count review completions by local date
+  // Build a map of problem_id -> next_review_date for filtering
+  const reviewDateByProblem = new Map<string, string>();
+  (problemRows ?? []).forEach((p) => {
+    if (p.id && p.next_review_date) {
+      reviewDateByProblem.set(p.id, p.next_review_date);
+    }
+  });
+
+  // Count review completions — but ONLY for problems that were actually due on that day
+  // (not overdue reviews, those don't count toward streak or heatmap activity)
   (reviewRows ?? []).forEach((row) => {
+    const reviewDate = reviewDateByProblem.get(row.problem_id);
+    if (!reviewDate) return; // unknown problem, skip
     const d = new Date(row.reviewed_at);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    activityCounts.set(key, (activityCounts.get(key) ?? 0) + 1);
+    // Only count if the review happened on the day the problem was due
+    if (key === reviewDate) {
+      activityCounts.set(key, (activityCounts.get(key) ?? 0) + 1);
+    }
   });
 
   // For new problems: only count on days where nothing was due for review
+  // Only consider problems created in the last 6 months
+  const sixMonthsAgoStr = localDateStr(sixMonthsAgo);
   const dueByDate = new Map<string, number>();
   (problemRows ?? []).forEach((p) => {
     if (p.next_review_date) {
@@ -63,8 +79,8 @@ export default async function DashboardPage() {
   (problemRows ?? []).forEach((p) => {
     const d = new Date(p.created_at);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    // Only count if there were zero problems due for review that day
-    if ((dueByDate.get(key) ?? 0) === 0) {
+    // Only count problems created in the last 6 months, and only if no reviews were due that day
+    if (key >= sixMonthsAgoStr && (dueByDate.get(key) ?? 0) === 0) {
       activityCounts.set(key, (activityCounts.get(key) ?? 0) + 1);
     }
   });
