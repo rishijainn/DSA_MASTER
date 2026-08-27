@@ -1,5 +1,3 @@
-const API_URL = "https://dsa-master-bice.vercel.app";
-
 let popupShown = false;
 
 function getSlugFromUrl() {
@@ -144,23 +142,30 @@ function createPopup(slug) {
 
     document.getElementById("dsa-save").textContent = "Saving...";
 
-    const res = await fetch(`${API_URL}/api/log-submission`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        slug: slug,
-        url: window.location.href,
-        title: titleFromSlug(slug),
-        hint_used: hintUsed,
-        felt_difficulty: feltDifficulty,
-        difficulty: getLeetCodeDifficulty(),
-      }),
-    });
+    const payload = {
+      slug: slug,
+      url: window.location.href,
+      title: titleFromSlug(slug),
+      hint_used: hintUsed,
+      felt_difficulty: feltDifficulty,
+      difficulty: getLeetCodeDifficulty(),
+    };
 
-    if (res.ok) {
+    let res;
+    try {
+      res = await chrome.runtime.sendMessage({
+        type: "log-submission",
+        payload,
+      });
+    } catch (e) {
+      document.getElementById("dsa-msg").style.color = "#f87171";
+      document.getElementById("dsa-msg").textContent =
+        "Can't reach DSA Master. Reload the extension.";
+      document.getElementById("dsa-save").textContent = "Save";
+      return;
+    }
+
+    if (res && res.ok) {
       document.getElementById("dsa-msg").style.color = "#34d399";
       document.getElementById("dsa-msg").textContent =
         "✓ Logged! See you at next review.";
@@ -168,7 +173,9 @@ function createPopup(slug) {
     } else {
       document.getElementById("dsa-msg").style.color = "#f87171";
       document.getElementById("dsa-msg").textContent =
-        "Something went wrong. Try again.";
+        res?.error === "NO_TOKEN"
+          ? "No token found. Open extension and connect first."
+          : "Something went wrong. Try again.";
       document.getElementById("dsa-save").textContent = "Save";
     }
   });

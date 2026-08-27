@@ -6,6 +6,9 @@
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; connect-src https://dsa-master-bice.vercel.app"
   },
+  "background": {
+    "service_worker": "background.js"
+  },
   "permissions": [
     "storage",
     "activeTab"
