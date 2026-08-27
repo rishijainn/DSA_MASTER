@@ -1,11 +1,11 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
-import { calculateNextReview, findAvailableDate } from '@/lib/fsrs'
+import { calculateNextReview, findAvailableDate, type FeltDifficulty } from '@/lib/fsrs'
 import { corsHeaders, handleOptions } from '@/lib/cors'
 import { updateStreak } from '@/lib/streak'
 
-export async function OPTIONS() {
-  return handleOptions()
+export async function OPTIONS(request: NextRequest) {
+  return handleOptions(request)
 }
 
 export async function POST(request: NextRequest) {
@@ -38,25 +38,36 @@ export async function POST(request: NextRequest) {
     const { slug, url: rawUrl, title, hint_used, felt_difficulty, difficulty } = body
 
     if (!slug || !rawUrl || !title || hint_used === undefined || !felt_difficulty || !difficulty) {
-      return NextResponse.json({ error: 'Missing fields' }, { status: 400, headers: corsHeaders() })
+      return NextResponse.json({ error: 'Missing fields' }, { status: 400, headers: corsHeaders(request) })
     }
 
-    // strip /submissions/... path so we always store the clean problem page URL
-    const url = rawUrl.replace(/\/submissions\/.*$/, '/')
+    // Validate and sanitize inputs
+    const cleanSlug = String(slug).replace(/[^a-zA-Z0-9-]/g, '').slice(0, 100)
+    const cleanTitle = String(title).replace(/[<>]/g, '').slice(0, 200)
+    const cleanUrl = String(rawUrl).replace(/\/submissions\/.*$/, '/').slice(0, 500)
+    const validDifficulties = ['easy', 'medium', 'hard']
+    const cleanDifficulty = validDifficulties.includes(difficulty) ? difficulty : 'easy'
+    const cleanHintUsed = Boolean(hint_used)
+    const validFeltDifficulties: FeltDifficulty[] = ['easy', 'medium', 'hard', 'forgot']
+    const cleanFeltDifficulty: FeltDifficulty = validFeltDifficulties.includes(felt_difficulty) ? felt_difficulty : 'medium'
+
+    if (!cleanSlug) {
+      return NextResponse.json({ error: 'Invalid slug' }, { status: 400, headers: corsHeaders(request) })
+    }
 
     // check if problem already exists
     const { data: existing } = await supabase
       .from('problems')
       .select('id, review_count, stability')
       .eq('user_id', userId)
-      .eq('leetcode_slug', slug)
+      .eq('leetcode_slug', cleanSlug)
       .maybeSingle()
 
     if (existing) {
       const { newStability, nextReviewDate: idealDate } = calculateNextReview({
         stability: existing.stability,
-        feltDifficulty: felt_difficulty,
-        hintUsed: hint_used
+        feltDifficulty: cleanFeltDifficulty,
+        hintUsed: cleanHintUsed
       })
 
       const nextReviewDate = await findAvailableDate(
@@ -70,8 +81,8 @@ export async function POST(request: NextRequest) {
       await supabase
         .from('problems')
         .update({
-          hint_used,
-          felt_difficulty,
+          hint_used: cleanHintUsed,
+          felt_difficulty: cleanFeltDifficulty,
           stability: newStability,
           next_review_date: nextReviewDate,
           last_reviewed_at: new Date().toISOString(),
@@ -82,8 +93,8 @@ export async function POST(request: NextRequest) {
       await supabase.from('review_logs').insert({
         problem_id: existing.id,
         user_id: userId,
-        hint_used,
-        felt_difficulty
+        hint_used: cleanHintUsed,
+        felt_difficulty: cleanFeltDifficulty
       })
 
       // Re-solve of existing problem = review → always check streak
@@ -95,8 +106,8 @@ export async function POST(request: NextRequest) {
     // new problem
     const { newStability, nextReviewDate: idealDate } = calculateNextReview({
       stability: 1,
-      feltDifficulty: felt_difficulty,
-      hintUsed: hint_used
+      feltDifficulty: cleanFeltDifficulty,
+      hintUsed: cleanHintUsed
     })
 
     const nextReviewDate = await findAvailableDate(
@@ -110,12 +121,12 @@ export async function POST(request: NextRequest) {
 
     const { error: insertError } = await supabase.from('problems').insert({
       user_id: userId,
-      leetcode_slug: slug,
-      title,
-      leetcode_url: url,
-      difficulty,
-      hint_used,
-      felt_difficulty,
+      leetcode_slug: cleanSlug,
+      title: cleanTitle,
+      leetcode_url: cleanUrl,
+      difficulty: cleanDifficulty,
+      hint_used: cleanHintUsed,
+      felt_difficulty: cleanFeltDifficulty,
       stability: newStability,
       next_review_date: nextReviewDate,
       last_reviewed_at: new Date().toISOString(),

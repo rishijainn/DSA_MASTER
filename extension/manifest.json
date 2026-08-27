@@ -3,6 +3,9 @@
   "name": "DSA Master",
   "version": "1.0.0",
   "description": "Track your LeetCode and GFG submissions with spaced repetition",
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src https://dsa-master-bice.vercel.app"
+  },
   "permissions": [
     "storage",
     "activeTab"
