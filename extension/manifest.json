@@ -10,6 +10,9 @@
     "storage",
     "activeTab"
   ],
+  "host_permissions": [
+    "https://dsa-master-bice.vercel.app/*"
+  ],
   "content_scripts": [
     {
       "matches": [
