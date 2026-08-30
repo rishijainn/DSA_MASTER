@@ -31,6 +31,12 @@ function getResetIconButton() {
       return btn instanceof HTMLElement ? btn : null;
     }
   }
+  // the reset svg may sit inside a wrapper div inside the button
+  const icon = document.querySelector(".fa-arrow-rotate-left, [class*='arrow-rotate-left']");
+  if (icon) {
+    const btn = icon.closest("button");
+    if (btn instanceof HTMLElement) return btn;
+  }
   // last resort — any button whose aria-label/title mentions reset
   return (
     [...document.querySelectorAll("button")].find((b) =>
@@ -56,21 +62,45 @@ function getConfirmButton() {
   return null;
 }
 
+function getResetMenuItem() {
+  const texts = [
+    "reset to default code definition",
+    "reset to default",
+    "reset code",
+    "reset",
+  ];
+  for (const el of document.querySelectorAll(
+    '[role="menu"] button, [role="menu"] div, [role="menu"] li, [role="listbox"] button, [role="listbox"] div',
+  )) {
+    const txt = el.textContent?.trim().toLowerCase() || "";
+    if (texts.some((t) => txt === t || txt.startsWith(t))) return el;
+  }
+  return null;
+}
+
 function resetLeetCodeCode() {
   const btn = getResetIconButton();
   if (!btn) return false;
   btn.click();
 
-  // the confirm dialog renders asynchronously — watch for its button and confirm
-  const observer = new MutationObserver(() => {
+  // The confirm dialog (or an intermediate menu item) renders asynchronously.
+  // Poll briefly and click through: menu item → confirm. Gives up silently.
+  let tries = 0;
+  const poll = () => {
+    tries++;
     const confirm = getConfirmButton();
     if (confirm) {
       confirm.click();
-      observer.disconnect();
+      return;
     }
-  });
-  observer.observe(document.body, { childList: true, subtree: true });
-  setTimeout(() => observer.disconnect(), 4000);
+    const item = getResetMenuItem();
+    if (item) {
+      item.click();
+      return;
+    }
+    if (tries < 30) setTimeout(poll, 200);
+  };
+  setTimeout(poll, 150);
   return true;
 }
 
@@ -363,3 +393,5 @@ if (slug) {
     watchForAccepted(slug)
   }
 }
+
+watchForProblemChanges()
