@@ -307,8 +307,14 @@ function createPopup(slug) {
       document.getElementById("dsa-msg").style.color = "#34d399";
       document.getElementById("dsa-msg").textContent =
         "✓ Logged! Code reset for next time.";
-      resetLeetCodeCode();
-      setTimeout(() => popup.remove(), 2000);
+      setTimeout(() => popup.remove(), 1200);
+      setTimeout(() => {
+        try {
+          resetLeetCodeCode();
+        } catch (e) {
+          /* never let a UI click break the save flow */
+        }
+      }, 2000);
     } else {
       document.getElementById("dsa-msg").style.color = "#f87171";
       document.getElementById("dsa-msg").textContent =

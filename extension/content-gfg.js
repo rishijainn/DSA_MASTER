@@ -53,15 +53,18 @@ function getGfgResetIcon() {
     const svg = document.querySelector('[id*="noun-reset"]') ||
         document.querySelector('.problems_header_icons__h94Bp')
     if (!svg) return null
-    const target = svg.closest('div[class*="problems_header_icons"], [id*="noun-reset"]') || svg
+    // prefer clicking the svg itself (event bubbles to GFG's handler) rather than
+    // the broad container div, which may wrap multiple icons
+    const target = svg.closest('button') || svg
     return target instanceof HTMLElement ? target : null
 }
 
 function getGfgConfirmButton() {
     const dialogs = document.querySelectorAll('[role="dialog"], .modal, [class*="modal"]')
     for (const d of dialogs) {
+        if (!/reset/i.test(d.textContent?.trim() || '')) continue
         const btns = [...d.querySelectorAll('button')].filter(b =>
-            /confirm|ok|yes/i.test(b.textContent?.trim() || '')
+            /confirm|ok|yes|reset/i.test(b.textContent?.trim() || '')
         )
         if (btns.length) return btns[btns.length - 1]
     }
@@ -69,18 +72,22 @@ function getGfgConfirmButton() {
 }
 
 function resetGfgCode() {
-    const icon = getGfgResetIcon()
-    if (!icon) return false
-    icon.click()
-    // confirm dialog (if any) renders async — poll briefly and confirm
-    let tries = 0
-    const poll = () => {
-        tries++
-        const confirm = getGfgConfirmButton()
-        if (confirm) { confirm.click(); return }
-        if (tries < 30) setTimeout(poll, 200)
-    }
-    setTimeout(poll, 150)
+    try {
+        const icon = getGfgResetIcon()
+        if (!icon) return false
+        icon.click()
+        // confirm dialog (if any) renders async — poll briefly and confirm
+        let tries = 0
+        const poll = () => {
+            tries++
+            try {
+                const confirm = getGfgConfirmButton()
+                if (confirm) { confirm.click(); return }
+            } catch (e) { /* ignore */ }
+            if (tries < 30) setTimeout(poll, 200)
+        }
+        setTimeout(poll, 150)
+    } catch (e) { /* never let a UI click break the save flow */ }
     return true
 }
 
@@ -242,8 +249,8 @@ function createPopup(slug) {
         if (res && res.ok) {
             document.getElementById('dsa-msg').style.color = '#34d399'
             document.getElementById('dsa-msg').textContent = '✓ Logged! Code reset for next time.'
-            resetGfgCode()
-            setTimeout(() => popup.remove(), 2000)
+            setTimeout(() => popup.remove(), 1200)
+            setTimeout(resetGfgCode, 2000)
         } else {
             document.getElementById('dsa-msg').style.color = '#f87171'
             document.getElementById('dsa-msg').textContent = res?.error === 'NO_TOKEN'
