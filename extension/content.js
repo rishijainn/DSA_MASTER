@@ -7,10 +7,11 @@ function getSlugFromUrl() {
 
 // ── Reset editor to default code definition ────────────────────────────────
 // When you open a LeetCode problem you've solved before, LeetCode restores your
-// previous solution into the editor. For review sessions that defeats spaced
-// repetition, so we automatically hit LeetCode's own reset (the editor toolbar
-// reset icon) after the page loads. Nothing is destroyed — your submitted
-// solutions stay in LeetCode's Submissions tab.
+// previous solution into the editor. That defeats spaced repetition on the next
+// review, so once you log a submission through the DSA Master popup we hit
+// LeetCode's own reset (the editor toolbar reset icon) to clear the editor.
+// Nothing is destroyed — your submitted solutions stay in LeetCode's Submissions
+// tab. The "⟳ Reset Code" pill also lets you reset manually anytime.
 //
 // Current LeetCode UI (2026): the reset control is an icon button rendered with
 // FontAwesome's .fa-arrow-rotate-left in the editor toolbar. Clicking it opens a
@@ -140,38 +141,6 @@ function showResetButton() {
   btn.addEventListener("mouseenter", () => (btn.style.borderColor = "#7c3aed"));
   btn.addEventListener("mouseleave", () => (btn.style.borderColor = "#3f3f46"));
   document.body.appendChild(btn);
-}
-
-let activeSlug = null;
-let resetting = false;
-
-function resetOnOpen(slug) {
-  if (resetting) return;
-  resetting = true;
-  showResetButton();
-  let attempts = 0;
-  const t = setInterval(() => {
-    attempts++;
-    if (resetLeetCodeCode() || attempts >= 20) {
-      clearInterval(t);
-      resetting = false;
-    }
-  }, 600);
-  // give up after 12s even if reset logic keeps returning (already reset) — stop
-  setTimeout(() => {
-    clearInterval(t);
-    resetting = false;
-  }, 12000);
-}
-
-function watchForProblemChanges() {
-  setInterval(() => {
-    const slug = getSlugFromUrl();
-    if (slug && slug !== activeSlug) {
-      activeSlug = slug;
-      resetOnOpen(slug);
-    }
-  }, 1000);
 }
 
 function titleFromSlug(slug) {
@@ -337,7 +306,8 @@ function createPopup(slug) {
     if (res && res.ok) {
       document.getElementById("dsa-msg").style.color = "#34d399";
       document.getElementById("dsa-msg").textContent =
-        "✓ Logged! See you at next review.";
+        "✓ Logged! Code reset for next time.";
+      resetLeetCodeCode();
       setTimeout(() => popup.remove(), 2000);
     } else {
       document.getElementById("dsa-msg").style.color = "#f87171";
@@ -387,11 +357,10 @@ function watchForAccepted(slug) {
 
 const slug = getSlugFromUrl()
 if (slug) {
+  showResetButton();
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => watchForAccepted(slug))
   } else {
     watchForAccepted(slug)
   }
 }
-
-watchForProblemChanges()
