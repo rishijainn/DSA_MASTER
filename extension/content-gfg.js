@@ -44,10 +44,12 @@ function isAccepted(node) {
 }
 
 // ── Reset editor to default code definition ────────────────────────────────
-// After logging a submission through the DSA Master popup we click GFG's own
-// reset icon (noun-reset svg in the problems header) to clear the editor for the
-// next review. GFG directly resets on click, but we also clear any confirm dialog
-// if one appears. The "⟳ Reset Code" pill lets you reset manually anytime.
+// When you open a GFG problem you've solved before, GFG restores your previous
+// solution into the editor. For review sessions that defeats spaced repetition,
+// so we automatically click GFG's own reset icon (noun-reset svg in the problems
+// header) as soon as the page loads. GFG resets directly on click, but we also
+// clear any confirm dialog if one appears. The "⟳ Reset Code" pill lets you
+// reset manually anytime.
 
 function getGfgResetIcon() {
     const svg = document.querySelector('[id*="noun-reset"]') ||
@@ -127,6 +129,37 @@ function showResetButton() {
     btn.addEventListener('mouseenter', () => (btn.style.borderColor = '#7c3aed'))
     btn.addEventListener('mouseleave', () => (btn.style.borderColor = '#3f3f46'))
     document.body.appendChild(btn)
+}
+
+let activeSlug = null
+let resetting = false
+
+function resetOnOpen() {
+    if (resetting) return
+    resetting = true
+    showResetButton()
+    let attempts = 0
+    const t = setInterval(() => {
+        attempts++
+        if (resetGfgCode() || attempts >= 20) {
+            clearInterval(t)
+            resetting = false
+        }
+    }, 600)
+    setTimeout(() => {
+        clearInterval(t)
+        resetting = false
+    }, 12000)
+}
+
+function watchForProblemChanges() {
+    setInterval(() => {
+        const slug = getSlugFromUrl()
+        if (slug && slug !== activeSlug) {
+            activeSlug = slug
+            resetOnOpen()
+        }
+    }, 1000)
 }
 
 function createPopup(slug) {
@@ -248,9 +281,8 @@ function createPopup(slug) {
 
         if (res && res.ok) {
             document.getElementById('dsa-msg').style.color = '#34d399'
-            document.getElementById('dsa-msg').textContent = '✓ Logged! Code reset for next time.'
-            setTimeout(() => popup.remove(), 1200)
-            setTimeout(resetGfgCode, 2000)
+            document.getElementById('dsa-msg').textContent = '✓ Logged! See you at next review.'
+            setTimeout(() => popup.remove(), 2000)
         } else {
             document.getElementById('dsa-msg').style.color = '#f87171'
             document.getElementById('dsa-msg').textContent = res?.error === 'NO_TOKEN'
@@ -290,10 +322,11 @@ function watchForAccepted(slug) {
 
 const slug = getSlugFromUrl()
 if (slug) {
-    showResetButton()
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => watchForAccepted(slug))
     } else {
         watchForAccepted(slug)
     }
 }
+
+watchForProblemChanges()
