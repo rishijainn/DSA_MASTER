@@ -5,6 +5,163 @@ function getSlugFromUrl() {
   return match ? match[1] : null;
 }
 
+// ── Reset editor to default code definition ────────────────────────────────
+// When you open a LeetCode problem you've solved before, LeetCode restores your
+// previous solution into the editor. For review sessions that defeats spaced
+// repetition, so we automatically hit LeetCode's own "Reset to default code
+// definition" (kebab menu → Reset) after the page loads. Nothing is destroyed —
+// your submitted solutions stay in LeetCode's Submissions tab.
+
+function getResetMenuButton() {
+  const texts = ["reset", "reset code", "reset to default code definition"];
+  const all = [
+    ...document.querySelectorAll('[role="menu"] button, [role="menu"] div, [role="listbox"] button'),
+  ];
+  const exact = all.find(
+    (el) =>
+      el.children.length === 0 &&
+      texts.includes(el.textContent?.trim().toLowerCase()),
+  );
+  if (exact) return exact;
+
+  // fallback — scan any leaf element for the exact menu label
+  return [...document.querySelectorAll("div, button, span")].find(
+    (el) =>
+      el.children.length === 0 &&
+      texts.includes(el.textContent?.trim().toLowerCase()),
+  );
+}
+
+function getEditorKebabButton() {
+  const editor = document.querySelector("#editor");
+  if (!editor) return null;
+  const buttons = [...editor.querySelectorAll("button")];
+  return (
+    buttons.find((b) =>
+      /more|code editor|menu/i.test(
+        `${b.getAttribute("aria-label") || ""} ${b.getAttribute("title") || ""}`,
+      ),
+    ) ||
+    buttons.find((b) => b.querySelectorAll("svg circle").length >= 3) ||
+    null
+  );
+}
+
+function getResetConfirmButton() {
+  const containers = [
+    ...document.querySelectorAll('[role="dialog"], [role="menu"], [role="alertdialog"]'),
+  ];
+  for (const c of containers) {
+    if ((c.textContent || "").length > 1500) continue;
+    if (!/reset/i.test(c.textContent)) continue;
+    const candidates = [...c.querySelectorAll("button")].filter((b) =>
+      /^reset([\s\S]*)$/i.test(b.textContent?.trim() || ""),
+    );
+    if (candidates.length) return candidates[candidates.length - 1];
+  }
+  // fallback — any button whose visible text is exactly "Reset"
+  return (
+    [...document.querySelectorAll("button")].find(
+      (b) => b.textContent?.trim().toLowerCase() === "reset",
+    ) || null
+  );
+}
+
+function resetLeetCodeCode() {
+  const editor = document.querySelector("#editor");
+  if (!editor) return false;
+
+  // 1) click the editor kebab ("…") button to open the menu
+  const kebab = getEditorKebabButton();
+  if (kebab) {
+    kebab.click();
+    // 2) non-blocking: after menu renders, click "Reset to default code definition"
+    setTimeout(() => {
+      const item = getResetMenuButton();
+      if (item) {
+        item.click();
+        // 3) confirm the "Reset to default code definition?" modal
+        setTimeout(() => {
+          const confirmBtn = getResetConfirmButton();
+          if (confirmBtn) confirmBtn.click();
+        }, 80);
+      }
+    }, 120);
+    return true;
+  }
+  return false;
+}
+
+function showResetButton() {
+  if (document.getElementById("dsa-reset-btn")) return;
+
+  const btn = document.createElement("div");
+  btn.id = "dsa-reset-btn";
+  btn.textContent = "⟳ Reset Code";
+  btn.style.cssText = `
+    position: fixed;
+    left: 16px;
+    bottom: 90px;
+    z-index: 99998;
+    padding: 8px 14px;
+    border-radius: 999px;
+    background: #18181b;
+    border: 1px solid #3f3f46;
+    color: #d4d4d8;
+    font-family: -apple-system, sans-serif;
+    font-size: 12px;
+    cursor: pointer;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    user-select: none;
+  `;
+  btn.addEventListener("click", () => {
+    let attempts = 0;
+    const t = setInterval(() => {
+      attempts++;
+      if (resetLeetCodeCode() || attempts >= 6) {
+        clearInterval(t);
+        btn.textContent = "⟳ Reset Code";
+      }
+    }, 500);
+    btn.textContent = "⟳ Resetting…";
+  });
+  btn.addEventListener("mouseenter", () => (btn.style.borderColor = "#7c3aed"));
+  btn.addEventListener("mouseleave", () => (btn.style.borderColor = "#3f3f46"));
+  document.body.appendChild(btn);
+}
+
+let activeSlug = null;
+let resetting = false;
+
+function resetOnOpen(slug) {
+  if (resetting) return;
+  resetting = true;
+  showResetButton();
+  let attempts = 0;
+  const t = setInterval(() => {
+    attempts++;
+    if (resetLeetCodeCode() || attempts >= 20) {
+      clearInterval(t);
+      resetting = false;
+    }
+  }, 600);
+  // give up after 12s even if reset logic keeps returning (already reset) — stop
+  setTimeout(() => {
+    clearInterval(t);
+    resetting = false;
+  }, 12000);
+}
+
+function watchForProblemChanges() {
+  setInterval(() => {
+    const slug = getSlugFromUrl();
+    if (slug && slug !== activeSlug) {
+      activeSlug = slug;
+      resetOnOpen(slug);
+    }
+  }, 1000);
+}
+
 function titleFromSlug(slug) {
   return slug
     .split("-")
