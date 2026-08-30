@@ -8,88 +8,70 @@ function getSlugFromUrl() {
 // ── Reset editor to default code definition ────────────────────────────────
 // When you open a LeetCode problem you've solved before, LeetCode restores your
 // previous solution into the editor. For review sessions that defeats spaced
-// repetition, so we automatically hit LeetCode's own "Reset to default code
-// definition" (kebab menu → Reset) after the page loads. Nothing is destroyed —
-// your submitted solutions stay in LeetCode's Submissions tab.
+// repetition, so we automatically hit LeetCode's own reset (the editor toolbar
+// reset icon) after the page loads. Nothing is destroyed — your submitted
+// solutions stay in LeetCode's Submissions tab.
+//
+// Current LeetCode UI (2026): the reset control is an icon button rendered with
+// FontAwesome's .fa-arrow-rotate-left in the editor toolbar. Clicking it opens a
+// native confirm dialog whose confirm button is labeled "Confirm".
 
-function getResetMenuButton() {
-  const texts = ["reset", "reset code", "reset to default code definition"];
-  const all = [
-    ...document.querySelectorAll('[role="menu"] button, [role="menu"] div, [role="listbox"] button'),
+function getResetIconButton() {
+  const selectors = [
+    ".fa-arrow-rotate-left",
+    'svg[data-icon="arrow-rotate-left"]',
+    '[class*="arrow-rotate-left"]',
+    'svg[data-icon="rotate-left"]',
+    '[class*="rotate-left"]',
   ];
-  const exact = all.find(
-    (el) =>
-      el.children.length === 0 &&
-      texts.includes(el.textContent?.trim().toLowerCase()),
-  );
-  if (exact) return exact;
-
-  // fallback — scan any leaf element for the exact menu label
-  return [...document.querySelectorAll("div, button, span")].find(
-    (el) =>
-      el.children.length === 0 &&
-      texts.includes(el.textContent?.trim().toLowerCase()),
-  );
-}
-
-function getEditorKebabButton() {
-  const editor = document.querySelector("#editor");
-  if (!editor) return null;
-  const buttons = [...editor.querySelectorAll("button")];
+  for (const sel of selectors) {
+    const el = document.querySelector(sel);
+    if (el) {
+      const btn = el.closest("button") || el;
+      return btn instanceof HTMLElement ? btn : null;
+    }
+  }
+  // last resort — any button whose aria-label/title mentions reset
   return (
-    buttons.find((b) =>
-      /more|code editor|menu/i.test(
+    [...document.querySelectorAll("button")].find((b) =>
+      /reset/i.test(
         `${b.getAttribute("aria-label") || ""} ${b.getAttribute("title") || ""}`,
       ),
-    ) ||
-    buttons.find((b) => b.querySelectorAll("svg circle").length >= 3) ||
-    null
-  );
-}
-
-function getResetConfirmButton() {
-  const containers = [
-    ...document.querySelectorAll('[role="dialog"], [role="menu"], [role="alertdialog"]'),
-  ];
-  for (const c of containers) {
-    if ((c.textContent || "").length > 1500) continue;
-    if (!/reset/i.test(c.textContent)) continue;
-    const candidates = [...c.querySelectorAll("button")].filter((b) =>
-      /^reset([\s\S]*)$/i.test(b.textContent?.trim() || ""),
-    );
-    if (candidates.length) return candidates[candidates.length - 1];
-  }
-  // fallback — any button whose visible text is exactly "Reset"
-  return (
-    [...document.querySelectorAll("button")].find(
-      (b) => b.textContent?.trim().toLowerCase() === "reset",
     ) || null
   );
 }
 
-function resetLeetCodeCode() {
-  const editor = document.querySelector("#editor");
-  if (!editor) return false;
-
-  // 1) click the editor kebab ("…") button to open the menu
-  const kebab = getEditorKebabButton();
-  if (kebab) {
-    kebab.click();
-    // 2) non-blocking: after menu renders, click "Reset to default code definition"
-    setTimeout(() => {
-      const item = getResetMenuButton();
-      if (item) {
-        item.click();
-        // 3) confirm the "Reset to default code definition?" modal
-        setTimeout(() => {
-          const confirmBtn = getResetConfirmButton();
-          if (confirmBtn) confirmBtn.click();
-        }, 80);
-      }
-    }, 120);
-    return true;
+function getConfirmButton() {
+  const exact = [...document.querySelectorAll("button")].find(
+    (b) => b.textContent?.trim().toLowerCase() === "confirm",
+  );
+  if (exact) return exact;
+  // fallback — last matching button inside any open dialog
+  for (const d of document.querySelectorAll('[role="dialog"], [role="alertdialog"]')) {
+    const buttons = [...d.querySelectorAll("button")].filter((b) =>
+      /confirm|reset|yes/i.test(b.textContent?.trim() || ""),
+    );
+    if (buttons.length) return buttons[buttons.length - 1];
   }
-  return false;
+  return null;
+}
+
+function resetLeetCodeCode() {
+  const btn = getResetIconButton();
+  if (!btn) return false;
+  btn.click();
+
+  // the confirm dialog renders asynchronously — watch for its button and confirm
+  const observer = new MutationObserver(() => {
+    const confirm = getConfirmButton();
+    if (confirm) {
+      confirm.click();
+      observer.disconnect();
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+  setTimeout(() => observer.disconnect(), 4000);
+  return true;
 }
 
 function showResetButton() {
