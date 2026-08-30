@@ -43,6 +43,85 @@ function isAccepted(node) {
     )
 }
 
+// ── Reset editor to default code definition ────────────────────────────────
+// After logging a submission through the DSA Master popup we click GFG's own
+// reset icon (noun-reset svg in the problems header) to clear the editor for the
+// next review. GFG directly resets on click, but we also clear any confirm dialog
+// if one appears. The "⟳ Reset Code" pill lets you reset manually anytime.
+
+function getGfgResetIcon() {
+    const svg = document.querySelector('[id*="noun-reset"]') ||
+        document.querySelector('.problems_header_icons__h94Bp')
+    if (!svg) return null
+    const target = svg.closest('div[class*="problems_header_icons"], [id*="noun-reset"]') || svg
+    return target instanceof HTMLElement ? target : null
+}
+
+function getGfgConfirmButton() {
+    const dialogs = document.querySelectorAll('[role="dialog"], .modal, [class*="modal"]')
+    for (const d of dialogs) {
+        const btns = [...d.querySelectorAll('button')].filter(b =>
+            /confirm|ok|yes/i.test(b.textContent?.trim() || '')
+        )
+        if (btns.length) return btns[btns.length - 1]
+    }
+    return null
+}
+
+function resetGfgCode() {
+    const icon = getGfgResetIcon()
+    if (!icon) return false
+    icon.click()
+    // confirm dialog (if any) renders async — poll briefly and confirm
+    let tries = 0
+    const poll = () => {
+        tries++
+        const confirm = getGfgConfirmButton()
+        if (confirm) { confirm.click(); return }
+        if (tries < 30) setTimeout(poll, 200)
+    }
+    setTimeout(poll, 150)
+    return true
+}
+
+function showResetButton() {
+    if (document.getElementById('dsa-reset-btn')) return
+
+    const btn = document.createElement('div')
+    btn.id = 'dsa-reset-btn'
+    btn.textContent = '⟳ Reset Code'
+    btn.style.cssText = `
+    position: fixed;
+    left: 16px;
+    bottom: 90px;
+    z-index: 99998;
+    padding: 8px 14px;
+    border-radius: 999px;
+    background: #18181b;
+    border: 1px solid #3f3f46;
+    color: #d4d4d8;
+    font-family: -apple-system, sans-serif;
+    font-size: 12px;
+    cursor: pointer;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    user-select: none;
+  `
+    btn.addEventListener('click', () => {
+        let attempts = 0
+        const t = setInterval(() => {
+            attempts++
+            if (resetGfgCode() || attempts >= 6) {
+                clearInterval(t)
+                btn.textContent = '⟳ Reset Code'
+            }
+        }, 500)
+        btn.textContent = '⟳ Resetting…'
+    })
+    btn.addEventListener('mouseenter', () => (btn.style.borderColor = '#7c3aed'))
+    btn.addEventListener('mouseleave', () => (btn.style.borderColor = '#3f3f46'))
+    document.body.appendChild(btn)
+}
+
 function createPopup(slug) {
     const existing = document.getElementById('dsa-shadow-popup')
     if (existing) existing.remove()
@@ -162,7 +241,8 @@ function createPopup(slug) {
 
         if (res && res.ok) {
             document.getElementById('dsa-msg').style.color = '#34d399'
-            document.getElementById('dsa-msg').textContent = '✓ Logged! See you at next review.'
+            document.getElementById('dsa-msg').textContent = '✓ Logged! Code reset for next time.'
+            resetGfgCode()
             setTimeout(() => popup.remove(), 2000)
         } else {
             document.getElementById('dsa-msg').style.color = '#f87171'
@@ -203,6 +283,7 @@ function watchForAccepted(slug) {
 
 const slug = getSlugFromUrl()
 if (slug) {
+    showResetButton()
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => watchForAccepted(slug))
     } else {
