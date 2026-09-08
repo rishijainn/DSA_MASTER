@@ -8,6 +8,11 @@ export async function OPTIONS(request: NextRequest) {
 
 const CAP = 500 // max problems imported per call (run again to continue past this)
 
+// next_review_date is NOT NULL in the database, so unreviewed imports get a
+// far-future sentinel date: never enters the daily queue/streak/rank, and the
+// row is identified as unreviewed by stability = 0 until its first review.
+const UNREVIEWED_DATE = '9999-12-31'
+
 interface IncomingProblem {
   slug?: unknown
   title?: unknown
@@ -109,7 +114,7 @@ export async function POST(request: NextRequest) {
         hint_used: false,
         felt_difficulty: null,
         stability: 0,
-        next_review_date: null,
+        next_review_date: UNREVIEWED_DATE,
         last_reviewed_at: null,
         review_count: 0,
       }))

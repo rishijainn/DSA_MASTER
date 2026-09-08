@@ -33,7 +33,8 @@ function formatDate(dateStr: string) {
     return new Date(dateStr).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-function daysUntil(dateStr: string) {
+function daysUntil(dateStr: string, stability: number) {
+    if (stability === 0) return { text: 'Not started', color: '#484f58' }
     if (!dateStr) return { text: 'Not started', color: '#484f58' }
     const now = new Date()
     const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
@@ -156,7 +157,7 @@ export default function HistoryClient({ problems }: { problems: Problem[] }) {
                         {filtered.map((p, i) => {
                             const diff = difficultyBadge(p.difficulty)
                             const rank = rankBadge(p.difficulty)
-                            const nextReview = daysUntil(p.next_review_date)
+                            const nextReview = daysUntil(p.next_review_date, p.stability)
                             return (
                                 <div
                                     key={p.id}

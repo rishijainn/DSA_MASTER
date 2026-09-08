@@ -18,7 +18,7 @@ export default async function SettingsPage() {
     .from('problems')
     .select('*', { count: 'exact', head: true })
     .eq('user_id', user.id)
-    .not('next_review_date', 'is', null)
+    .gt('stability', 0)
 
   const extensionConnected = Boolean(settings?.extension_connected)
 

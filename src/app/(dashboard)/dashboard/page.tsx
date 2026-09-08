@@ -22,12 +22,12 @@ export default async function DashboardPage() {
     supabase.from("problems").select("*").eq("user_id", user.id).eq("next_review_date", today).order("next_review_date", { ascending: true }),
     supabase.from("problems").select("*", { count: "exact", head: true }).eq("user_id", user.id).lt("next_review_date", today),
     supabase.from("problems").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(10),
-    supabase.from("problems").select("*", { count: "exact", head: true }).eq("user_id", user.id).not("next_review_date", "is", null),
+    supabase.from("problems").select("*", { count: "exact", head: true }).eq("user_id", user.id).gt("stability", 0),
     supabase.from("review_logs").select("reviewed_at, problem_id").eq("user_id", user.id).gte("reviewed_at", sixMonthsAgo.toISOString()),
-    supabase.from("problems").select("id, created_at, next_review_date").eq("user_id", user.id),
-    // Imported backlog — never reviewed, no date scheduled yet. Not part of the
-    // daily queue, rank, or streak until they get their first review.
-    supabase.from("problems").select("id, title, difficulty, leetcode_slug, leetcode_url").eq("user_id", user.id).is("next_review_date", null).order("created_at", { ascending: false }),
+    supabase.from("problems").select("id, created_at, next_review_date, stability").eq("user_id", user.id),
+    // Imported backlog — stability 0 until first review (next_review_date is a
+    // far-future sentinel date). Not part of the daily queue, rank, or streak.
+    supabase.from("problems").select("id, title, difficulty, leetcode_slug, leetcode_url").eq("user_id", user.id).eq("stability", 0).order("created_at", { ascending: false }),
   ]);
 
   const settings = settingsRes.data;
@@ -42,6 +42,7 @@ export default async function DashboardPage() {
   const seen = new Set();
   const uniqueProblems = (allProblems ?? [])
     .filter((p) => {
+      if (p.stability === 0) return false; // unreviewed imports — not "recent reviews"
       if (seen.has(p.leetcode_slug)) return false;
       seen.add(p.leetcode_slug);
       return true;
@@ -53,7 +54,7 @@ export default async function DashboardPage() {
   // Build a map of problem_id -> next_review_date for filtering
   const reviewDateByProblem = new Map<string, string>();
   (problemRows ?? []).forEach((p) => {
-    if (p.id && p.next_review_date) {
+    if (p.id && p.stability > 0 && p.next_review_date) {
       reviewDateByProblem.set(p.id, p.next_review_date);
     }
   });
@@ -72,16 +73,16 @@ export default async function DashboardPage() {
   });
 
   // For new problems: only count on days where nothing was due for review.
-  // Unreviewed imports (next_review_date null) never count toward the heatmap.
+  // Unreviewed imports (stability 0) never count toward the heatmap.
   const sixMonthsAgoStr = localDateStr(sixMonthsAgo);
   const dueByDate = new Map<string, number>();
   (problemRows ?? []).forEach((p) => {
-    if (p.next_review_date) {
+    if (p.stability > 0 && p.next_review_date) {
       dueByDate.set(p.next_review_date, (dueByDate.get(p.next_review_date) ?? 0) + 1);
     }
   });
   (problemRows ?? []).forEach((p) => {
-    if (!p.next_review_date) return; // unreviewed import — guard the heatmap
+    if (p.stability === 0) return; // unreviewed import — guard the heatmap
     const d = new Date(p.created_at);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     // Only count problems created in the last 6 months, and only if no reviews were due that day
