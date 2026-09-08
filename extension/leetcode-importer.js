@@ -4,16 +4,21 @@
 // whatever LeetCode returns to the devtools console and does nothing else:
 // no popups, no backend calls, no storage writes.
 //
+// Primary path: LeetCode GraphQL `submissionList` (auth, paginated by lastKey
+// cursor, offset fallback). Fallback: the legacy /api/submissions endpoint.
+//
 // THROWAWAY: delete extension/leetcode-importer.js (and its block in
 // manifest.json) when the real import flow is wired up.
 //
-// How to test: log into LeetCode, open any /problems/* page in the same browser,
-// reload the extension first, then open the devtools console and look for
-// `[dsa-master:leetcode-import]` lines. To re-run without opening a new tab, add
-// `?dsa_lc_import_rerun=1` to the problem URL (or clear sessionStorage).
+// How to test: log into LeetCode, open any /problems/* page, reload the
+// extension, then open the devtools console and look for
+// `[dsa-master:leetcode-import]` lines. To re-run without a fresh tab, append
+// `?dsa_lc_import_rerun=1` to the URL.
 
 const TAG = '[dsa-master:leetcode-import]'
 const RUN_FLAG = 'dsa_master_lc_import_run'
+const MAX_PAGES = 50
+const PAGE_SIZE = 50
 
 function log(...args) {
   console.log(TAG, ...args)
@@ -24,220 +29,206 @@ function getCsrfToken() {
   return match ? match[1] : null
 }
 
-const ACCEPTED = 10 // LeetCode numeric status for Accepted
-
 function isAccepted(entry) {
-  return (
-    entry.status_display === 'Accepted' ||
-    entry.statusDisplay === 'Accepted' ||
-    Number(entry.status) === ACCEPTED
-  )
+  const display = entry.statusDisplay || entry.status_display
+  return display === 'Accepted' || Number(entry.status) === 10
 }
 
-// Strategy 1 — LeetCode's classic authenticated submissions API (200 OK, works).
-// Paged with offset/lastkey. Logs schema + full accepted list.
-async function tryLegacySubmissionsApi() {
+// slug -> { title, titleSlug, timestamp } keeping the EARLIEST accepted solve.
+function mergeAccepted(memo, submissions) {
+  for (const s of submissions) {
+    if (!isAccepted(s)) continue
+    const slug = s.titleSlug || s.title_slug
+    if (!slug) continue
+    const timestamp = Number(s.timestamp) || 0
+    const existing = memo.get(slug)
+    if (!existing || timestamp < existing.timestamp) {
+      memo.set(slug, { title: s.title, titleSlug: slug, timestamp })
+    }
+  }
+  return memo
+}
+
+// Primary — GraphQL submissionList. Paged via lastKey cursor; if LeetCode gives
+// hasNext but no cursor, falls back to offset stepping.
+async function tryGraphqlSubmissionList() {
+  const csrf = getCsrfToken()
+  const memo = new Map()
+  let totalFetched = 0
+  let lastKey = null
+  let offset = 0
+  let hasNext = false
+
   try {
-    const MAX_PAGES = 50
-    let lastKey = ''
-    let totalFetched = 0
-    let page = 0
-    let firstKeys = null
-    let hasNext = false
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const query = `
+        query submissionList($offset: Int!, $limit: Int!, $lastKey: String) {
+          submissionList(offset: $offset, limit: $limit, lastKey: $lastKey, questionSlug: "") {
+            hasNext
+            lastKey
+            submissions {
+              id
+              title
+              titleSlug
+              timestamp
+              statusDisplay
+              lang
+            }
+          }
+        }
+      `
+      const res = await fetch('https://leetcode.com/graphql', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'content-type': 'application/json',
+          'x-csrftoken': csrf || '',
+          'x-requested-with': 'XMLHttpRequest',
+          referer: window.location.href,
+        },
+        body: JSON.stringify({
+          query,
+          variables: { offset, limit: PAGE_SIZE, lastKey },
+          operationName: 'submissionList',
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok || json?.errors) {
+        log(
+          '[graphql submissionList] page',
+          page + 1,
+          'FAILED HTTP',
+          res.status,
+          json?.errors?.map((e) => e.message) ?? '',
+        )
+        return { ok: false, memo }
+      }
 
-    const seen = new Map() // slug -> earliest accepted submission
+      const list = json?.data?.submissionList
+      const subs = Array.isArray(list?.submissions) ? list.submissions : []
+      totalFetched += subs.length
+      mergeAccepted(memo, subs)
 
-    do {
+      hasNext = list?.hasNext === true || list?.hasNext === 'true'
+      const nextKey = typeof list?.lastKey === 'string' ? list.lastKey : null
+
+      log(
+        '[graphql submissionList] page',
+        page + 1,
+        'entries:',
+        subs.length,
+        '| hasNext:',
+        hasNext,
+        '| cursor:',
+        nextKey !== null ? (nextKey.slice(0, 24) + '…') : 'none',
+        '| unique accepted so far:',
+        memo.size,
+      )
+
+      if (!hasNext) break
+      if (nextKey !== null && nextKey !== lastKey) {
+        lastKey = nextKey
+        offset = 0
+      } else {
+        offset += PAGE_SIZE // cursor absent or stale → offset fallback
+      }
+    }
+  } catch (e) {
+    log('[graphql submissionList] fetch failed:', e instanceof Error ? e.message : String(e))
+    return { ok: false, memo }
+  }
+
+  log('[graphql submissionList] TOTAL fetched:', totalFetched, '| UNIQUE accepted:', memo.size)
+  return { ok: true, memo }
+}
+
+// Fallback — legacy /api/submissions endpoint (offset-based, no cursor).
+async function tryLegacySubmissionsApi() {
+  const memo = new Map()
+  let totalFetched = 0
+
+  try {
+    for (let page = 0; page < MAX_PAGES; page++) {
       const url =
         'https://leetcode.com/api/submissions/?offset=' +
-        Math.min(page * 20, 200) +
-        '&limit=20&lastkey=' +
-        encodeURIComponent(lastKey)
+        page * PAGE_SIZE +
+        '&limit=' +
+        PAGE_SIZE +
+        '&lastkey='
       const res = await fetch(url, {
         credentials: 'include',
         headers: { accept: 'application/json' },
       })
-      log('[api/submissions] page', page + 1, 'HTTP', res.status)
       if (!res.ok) break
-
       const json = await res.json()
-      if (firstKeys === null) {
-        firstKeys = Object.keys(json)
-        const firstDumpEntry = json.submissions_dump?.[0]
-        log(
-          '[api/submissions] response keys:',
-          firstKeys,
-          firstDumpEntry ? '| first entry keys: ' + Object.keys(firstDumpEntry) : '',
-        )
-      }
-
       const dump = Array.isArray(json.submissions_dump) ? json.submissions_dump : []
+      if (!dump.length) break
       totalFetched += dump.length
-      for (const entry of dump) {
-        if (!isAccepted(entry)) continue
-        const slug = entry.title_slug || entry.titleSlug
-        if (!slug) continue
-        const ts = Number(entry.timestamp) || 0
-        const existing = seen.get(slug)
-        if (!existing || ts < existing.timestamp) {
-          seen.set(slug, {
-            id: entry.id,
-            title: entry.title,
-            titleSlug: slug,
-            timestamp: ts,
-            lang: entry.lang,
-          })
-        }
-      }
-
+      mergeAccepted(memo, dump)
       log(
         '[api/submissions] page',
         page + 1,
         'entries:',
         dump.length,
-        '| unique accepted problems so far:',
-        seen.size,
+        '| unique accepted so far:',
+        memo.size,
       )
-
-      lastKey = json.last_key || ''
-      hasNext = json.has_next === true
-      page++
-      if (hasNext && !lastKey) {
-        log(
-          '[api/submissions] has_next=true but empty last_key; stopping to avoid a loop. ' +
-            'Try again — cursor paging may require passing lastkey from page 1.',
-        )
-        break
-      }
-    } while (hasNext && page < MAX_PAGES)
-
-    const accepted = [...seen.values()]
-    log(
-      '[api/submissions] TOTAL fetched:',
-      totalFetched,
-      '| UNIQUE accepted problems:',
-      accepted.length,
-    )
-    log(
-      '[api/submissions] accepted problems (slug, first-solved):',
-      accepted.map((a) => ({
-        title: a.title,
-        slug: a.titleSlug,
-        timestamp: a.timestamp,
-        when: a.timestamp ? new Date(Number(a.timestamp) * 1000).toISOString() : 'n/a',
-      })),
-    )
+      if (json.has_next !== true) break
+    }
   } catch (e) {
     log('[api/submissions] fetch failed:', e instanceof Error ? e.message : String(e))
+    return { ok: false, memo }
   }
+
+  log('[api/submissions] TOTAL fetched:', totalFetched, '| UNIQUE accepted:', memo.size)
+  return { ok: true, memo }
 }
 
-// Strategy 2 — GraphQL submissionList. Unknown signature in 2026; we log the body
-// so the error is visible instead of guessing.
-async function tryGraphqlSubmissionList() {
-  const csrf = getCsrfToken()
-  const query = `
-    query submissionList($offset: Int!, $limit: Int!, $lastKey: String) {
-      submissionList(offset: $offset, limit: $limit, lastKey: $lastKey, questionSlug: "") {
-        hasNext
-        submissions {
-          id
-          title
-          titleSlug
-          timestamp
-          statusDisplay
-          lang
-        }
-      }
-    }
-  `
-  try {
-    const res = await fetch('https://leetcode.com/graphql', {
-      method: 'POST',
-      credentials: 'include',
-      headers: {
-        'content-type': 'application/json',
-        'x-csrftoken': csrf || '',
-        'x-requested-with': 'XMLHttpRequest',
-        referer: window.location.href,
-      },
-      body: JSON.stringify({
-        query,
-        variables: { offset: 0, limit: 100, lastKey: null },
-        operationName: 'submissionList',
-      }),
-    })
-    log('[graphql submissionList] HTTP', res.status)
-    const text = await res.text()
-    let json = null
-    try {
-      json = JSON.parse(text)
-    } catch {
-      json = null
-    }
-    if (json?.errors) {
-      log(
-        '[graphql submissionList] errors:',
-        json.errors.map((el) => el.message),
-      )
-    }
-    const subs = json?.data?.submissionList?.submissions
-    log('[graphql submissionList] submissions:', Array.isArray(subs) ? subs.length : 0)
-    if (Array.isArray(subs)) {
-      log('[graphql submissionList] sample:', subs.slice(0, 10))
-    }
-  } catch (e) {
-    log(
-      '[graphql submissionList] fetch failed:',
-      e instanceof Error ? e.message : String(e),
-    )
-  }
-}
-
-// Strategy 3 — public counts (control; proves anonymity is not the issue).
-async function tryGraphqlCounts() {
-  const query = `
-    query getUserProfile($username: String!) {
-      matchedUser(username: $username) {
-        username
-        submitStats {
-          acSubmissionNum { difficulty count }
-        }
-      }
-    }
-  `
-  try {
-    const res = await fetch('https://leetcode.com/graphql', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', accept: 'application/json' },
-      body: JSON.stringify({
-        query,
-        variables: { username: 'neetcode' },
-        operationName: 'getUserProfile',
-      }),
-    })
-    const json = await res.json()
-    log(
-      '[graphql counts] HTTP',
-      res.status,
-      '| probe neetcode totals:',
-      json?.data?.matchedUser?.submitStats?.acSubmissionNum ?? 'n/a',
-    )
-  } catch (e) {
-    log('[graphql counts] fetch failed:', e instanceof Error ? e.message : String(e))
-  }
+function summarize(memo, source) {
+  const accepted = [...memo.values()].sort((a, b) => a.timestamp - b.timestamp)
+  log(
+    source,
+    '— UNIQUE accepted problems:',
+    accepted.length,
+    '| earliest:',
+    accepted[0]?.titleSlug,
+    accepted[0] ? new Date(accepted[0].timestamp * 1000).toISOString() : '',
+    '| latest:',
+    accepted[accepted.length - 1]?.titleSlug,
+    accepted[accepted.length - 1]
+      ? new Date(accepted[accepted.length - 1].timestamp * 1000).toISOString()
+      : '',
+  )
+  log(
+    source,
+    '— accepted problems (slug, first-solved):',
+    accepted.map((a) => ({
+      slug: a.titleSlug,
+      timestamp: a.timestamp,
+      when: new Date(a.timestamp * 1000).toISOString(),
+    })),
+  )
 }
 
 ;(async () => {
   try {
-    const forceRerun = new URL(window.location.href).searchParams.get('dsa_lc_import_rerun') === '1'
+    const forceRerun =
+      new URL(window.location.href).searchParams.get('dsa_lc_import_rerun') === '1'
     if (!forceRerun && sessionStorage.getItem(RUN_FLAG)) return
     sessionStorage.setItem(RUN_FLAG, '1')
     log('running console-only import probe…')
-    await tryLegacySubmissionsApi()
-    await tryGraphqlSubmissionList()
-    await tryGraphqlCounts()
-    log('done.')
+
+    const graph = await tryGraphqlSubmissionList()
+    if (graph.ok && graph.memo.size > 0) {
+      summarize(graph.memo, '[graphql submissionList]')
+      return
+    }
+    const legacy = await tryLegacySubmissionsApi()
+    if (legacy.ok && legacy.memo.size > 0) {
+      summarize(legacy.memo, '[api/submissions]')
+      return
+    }
+    log('no data captured. Check the page logs above for errors.')
   } catch (e) {
     log('unexpected error:', e instanceof Error ? e.message : String(e))
   }
