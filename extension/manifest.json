@@ -14,7 +14,8 @@
     "activeTab"
   ],
   "host_permissions": [
-    "https://dsa-master-bice.vercel.app/*"
+    "https://dsa-master-bice.vercel.app/*",
+    "https://leetcode.com/*"
   ],
   "content_scripts": [
     {
@@ -24,6 +25,15 @@
       "js": [
         "content.js"
       ]
+    },
+    {
+      "matches": [
+        "https://leetcode.com/problems/*"
+      ],
+      "js": [
+        "leetcode-importer.js"
+      ],
+      "run_at": "document_idle"
     },
     {
       "matches": [
