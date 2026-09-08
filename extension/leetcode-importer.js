@@ -38,14 +38,14 @@ function isAccepted(entry) {
 // Paged with offset/lastkey. Logs schema + full accepted list.
 async function tryLegacySubmissionsApi() {
   try {
-    const MAX_PAGES = 10
+    const MAX_PAGES = 50
     let lastKey = ''
     let totalFetched = 0
     let page = 0
     let firstKeys = null
     let hasNext = false
 
-    const accepted = []
+    const seen = new Map() // slug -> earliest accepted submission
 
     do {
       const url =
@@ -74,13 +74,17 @@ async function tryLegacySubmissionsApi() {
       const dump = Array.isArray(json.submissions_dump) ? json.submissions_dump : []
       totalFetched += dump.length
       for (const entry of dump) {
-        if (isAccepted(entry) && !accepted.some((a) => a.id === entry.id)) {
-          accepted.push({
+        if (!isAccepted(entry)) continue
+        const slug = entry.title_slug || entry.titleSlug
+        if (!slug) continue
+        const ts = Number(entry.timestamp) || 0
+        const existing = seen.get(slug)
+        if (!existing || ts < existing.timestamp) {
+          seen.set(slug, {
             id: entry.id,
             title: entry.title,
-            titleSlug: entry.title_slug || entry.titleSlug,
-            timestamp: entry.timestamp,
-            status_display: entry.status_display,
+            titleSlug: slug,
+            timestamp: ts,
             lang: entry.lang,
           })
         }
@@ -91,18 +95,31 @@ async function tryLegacySubmissionsApi() {
         page + 1,
         'entries:',
         dump.length,
-        '| accepted so far:',
-        accepted.length,
+        '| unique accepted problems so far:',
+        seen.size,
       )
 
-      lastKey = json.next_key_dump || json.hasNext_key || ''
-      hasNext = json.has_next === true || json.hasNext === true
+      lastKey = json.last_key || ''
+      hasNext = json.has_next === true
       page++
-    } while (hasNext && lastKey !== '' && page < MAX_PAGES)
+      if (hasNext && !lastKey) {
+        log(
+          '[api/submissions] has_next=true but empty last_key; stopping to avoid a loop. ' +
+            'Try again — cursor paging may require passing lastkey from page 1.',
+        )
+        break
+      }
+    } while (hasNext && page < MAX_PAGES)
 
-    log('[api/submissions] TOTAL fetched:', totalFetched, '| ACCEPTED:', accepted.length)
+    const accepted = [...seen.values()]
     log(
-      '[api/submissions] accepted problems (slug, timestamp, when):',
+      '[api/submissions] TOTAL fetched:',
+      totalFetched,
+      '| UNIQUE accepted problems:',
+      accepted.length,
+    )
+    log(
+      '[api/submissions] accepted problems (slug, first-solved):',
       accepted.map((a) => ({
         title: a.title,
         slug: a.titleSlug,
@@ -120,8 +137,8 @@ async function tryLegacySubmissionsApi() {
 async function tryGraphqlSubmissionList() {
   const csrf = getCsrfToken()
   const query = `
-    query submissionList($offset: Int!, $limit: Int!) {
-      submissionList(offset: $offset, limit: $limit, lastKey: null, questionSlug: "") {
+    query submissionList($offset: Int!, $limit: Int!, $lastKey: String) {
+      submissionList(offset: $offset, limit: $limit, lastKey: $lastKey, questionSlug: "") {
         hasNext
         submissions {
           id
@@ -146,7 +163,7 @@ async function tryGraphqlSubmissionList() {
       },
       body: JSON.stringify({
         query,
-        variables: { offset: 0, limit: 100 },
+        variables: { offset: 0, limit: 100, lastKey: null },
         operationName: 'submissionList',
       }),
     })
