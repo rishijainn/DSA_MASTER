@@ -34,6 +34,7 @@ function formatDate(dateStr: string) {
 }
 
 function daysUntil(dateStr: string) {
+    if (!dateStr) return { text: 'Not started', color: '#484f58' }
     const now = new Date()
     const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
     const todayMs = new Date(`${todayStr}T00:00:00`).getTime()

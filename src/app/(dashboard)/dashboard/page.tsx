@@ -22,7 +22,7 @@ export default async function DashboardPage() {
     supabase.from("problems").select("*").eq("user_id", user.id).eq("next_review_date", today).order("next_review_date", { ascending: true }),
     supabase.from("problems").select("*", { count: "exact", head: true }).eq("user_id", user.id).lt("next_review_date", today),
     supabase.from("problems").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(10),
-    supabase.from("problems").select("*", { count: "exact", head: true }).eq("user_id", user.id),
+    supabase.from("problems").select("*", { count: "exact", head: true }).eq("user_id", user.id).not("next_review_date", "is", null),
     supabase.from("review_logs").select("reviewed_at, problem_id").eq("user_id", user.id).gte("reviewed_at", sixMonthsAgo.toISOString()),
     supabase.from("problems").select("id, created_at, next_review_date").eq("user_id", user.id),
   ]);
@@ -67,8 +67,8 @@ export default async function DashboardPage() {
     }
   });
 
-  // For new problems: only count on days where nothing was due for review
-  // Only consider problems created in the last 6 months
+  // For new problems: only count on days where nothing was due for review.
+  // Unreviewed imports (next_review_date null) never count toward the heatmap.
   const sixMonthsAgoStr = localDateStr(sixMonthsAgo);
   const dueByDate = new Map<string, number>();
   (problemRows ?? []).forEach((p) => {
@@ -77,6 +77,7 @@ export default async function DashboardPage() {
     }
   });
   (problemRows ?? []).forEach((p) => {
+    if (!p.next_review_date) return; // unreviewed import — guard the heatmap
     const d = new Date(p.created_at);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     // Only count problems created in the last 6 months, and only if no reviews were due that day

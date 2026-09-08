@@ -1,28 +1,20 @@
-// ── LeetCode history scraper (CONSOLE-ONLY, do-not-interrupt) ───────────────
-// Standalone first pass at pulling a full, authenticated LeetCode solved list
-// using the user's OWN session (the tab is logged into LeetCode). It logs
-// whatever LeetCode returns to the devtools console and does nothing else:
-// no popups, no backend calls, no storage writes.
+// ── LeetCode history importer ──────────────────────────────────────────────
+// Uses the user's OWN LeetCode session (the tab is logged in) to pull their
+// full accepted history via the authenticated GraphQL `submissionList` query,
+// de-dupes to first-solved per slug, looks up each problem's difficulty, then
+// POSTs the list to DSA Master (`/api/import`) so rows are tracked as unreviewed
+// backlog. Runs ONLY when the user clicks the "⟳ Sync to DSA Master" pill (or
+// opens a problem with `?dsa_lc_sync=1`), never automatically.
 //
-// Primary path: LeetCode GraphQL `submissionList` (auth, paginated by lastKey
-// cursor, offset fallback). Fallback: the legacy /api/submissions endpoint.
-//
-// THROWAWAY: delete extension/leetcode-importer.js (and its block in
-// manifest.json) when the real import flow is wired up.
-//
-// How to test: log into LeetCode, open any /problems/* page, reload the
-// extension, then open the devtools console and look for
-// `[dsa-master:leetcode-import]` lines. To re-run without a fresh tab, append
-// `?dsa_lc_import_rerun=1` to the URL.
+// LeetCode caps submissionList pages (~20 rows/page regardless of limit), so
+// offset steps by the rows actually returned and paging walks until hasNext
+// is false (early pages, no cursor → offset stepping).
 
-const TAG = '[dsa-master:leetcode-import]'
-const RUN_FLAG = 'dsa_master_lc_import_run'
+const TAG = '[dsa-master:sync]'
+const API_URL = 'https://dsa-master-bice.vercel.app'
 const MAX_PAGES = 120 // covers ~2,400 rows (LeetCode returns ~20/page)
 const PAGE_SIZE = 50
-
-function log(...args) {
-  console.log(TAG, ...args)
-}
+const DIFF_CHUNK = 20 // difficulty lookups per GraphQL batch
 
 function getCsrfToken() {
   const match = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)
@@ -49,35 +41,36 @@ function mergeAccepted(memo, submissions) {
   return memo
 }
 
-// Primary — GraphQL submissionList. Paged via lastKey cursor; if LeetCode gives
-// hasNext but no cursor, falls back to offset stepping.
-async function tryGraphqlSubmissionList() {
+// Primary — GraphQL submissionList. Paged via lastKey cursor; LeetCode has
+// returned hasNext without a cursor, so we offset-step by rows actually
+// returned. An opaque but non-empty lastKey resets offset (clean cursor path).
+async function collectAcceptedHistory(onProgress) {
   const csrf = getCsrfToken()
   const memo = new Map()
   let totalFetched = 0
   let lastKey = null
   let offset = 0
-  let hasNext = false
 
-  try {
-    for (let page = 0; page < MAX_PAGES; page++) {
-      const query = `
-        query submissionList($offset: Int!, $limit: Int!, $lastKey: String) {
-          submissionList(offset: $offset, limit: $limit, lastKey: $lastKey, questionSlug: "") {
-            hasNext
-            lastKey
-            submissions {
-              id
-              title
-              titleSlug
-              timestamp
-              statusDisplay
-              lang
-            }
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const query = `
+      query submissionList($offset: Int!, $limit: Int!, $lastKey: String) {
+        submissionList(offset: $offset, limit: $limit, lastKey: $lastKey, questionSlug: "") {
+          hasNext
+          lastKey
+          submissions {
+            id
+            title
+            titleSlug
+            timestamp
+            statusDisplay
+            lang
           }
         }
-      `
-      const res = await fetch('https://leetcode.com/graphql', {
+      }
+    `
+    let res
+    try {
+      res = await fetch('https://leetcode.com/graphql', {
         method: 'POST',
         credentials: 'include',
         headers: {
@@ -92,146 +85,213 @@ async function tryGraphqlSubmissionList() {
           operationName: 'submissionList',
         }),
       })
-      const json = await res.json()
-      if (!res.ok || json?.errors) {
-        log(
-          '[graphql submissionList] page',
-          page + 1,
-          'FAILED HTTP',
-          res.status,
-          json?.errors?.map((e) => e.message) ?? '',
-        )
-        return { ok: false, memo }
-      }
-
-      const list = json?.data?.submissionList
-      const subs = Array.isArray(list?.submissions) ? list.submissions : []
-      totalFetched += subs.length
-      mergeAccepted(memo, subs)
-
-      hasNext = list?.hasNext === true || list?.hasNext === 'true'
-      const nextKey = typeof list?.lastKey === 'string' ? list.lastKey : null
-
-      log(
-        '[graphql submissionList] page',
-        page + 1,
-        'entries:',
-        subs.length,
-        '| hasNext:',
-        hasNext,
-        '| cursor:',
-        nextKey !== null ? (nextKey.slice(0, 24) + '…') : 'none',
-        '| unique accepted so far:',
-        memo.size,
-      )
-
-      if (!hasNext) break
-      if (nextKey !== null && nextKey !== lastKey) {
-        lastKey = nextKey
-        offset = 0
-      } else {
-        // LeetCode caps each page (~20 rows) regardless of limit — step offset by
-        // how many rows we actually got so no slice of history is skipped.
-        offset += Math.max(subs.length, 1)
-      }
+    } catch (e) {
+      throw new Error('LeetCode request failed: ' + (e instanceof Error ? e.message : String(e)))
     }
-  } catch (e) {
-    log('[graphql submissionList] fetch failed:', e instanceof Error ? e.message : String(e))
-    return { ok: false, memo }
+
+    const json = await res.json().catch(() => null)
+    if (!res.ok || !json || json.errors) {
+      throw new Error(
+        'LeetCode submissionList failed (HTTP ' +
+          res.status +
+          '): ' +
+          (json?.errors?.map((er) => er.message).join('; ') || '')
+      )
+    }
+
+    const list = json?.data?.submissionList
+    const subs = Array.isArray(list?.submissions) ? list.submissions : []
+    totalFetched += subs.length
+    mergeAccepted(memo, subs)
+
+    onProgress(page + 1, totalFetched, memo.size)
+
+    const hasNext = list?.hasNext === true || list?.hasNext === 'true'
+    if (!hasNext) break
+    const nextKey = typeof list?.lastKey === 'string' ? list.lastKey : null
+    if (nextKey && nextKey !== null && nextKey !== lastKey) {
+      lastKey = nextKey
+      offset = 0
+    } else {
+      offset += Math.max(subs.length, 1)
+    }
   }
 
-  log('[graphql submissionList] TOTAL fetched:', totalFetched, '| UNIQUE accepted:', memo.size)
-  return { ok: true, memo }
+  return { totalFetched, accepted: [...memo.values()] }
 }
 
-// Fallback — legacy /api/submissions endpoint (offset-based, no cursor).
-async function tryLegacySubmissionsApi() {
-  const memo = new Map()
-  let totalFetched = 0
-
-  try {
-    for (let page = 0; page < MAX_PAGES; page++) {
-      const url =
-        'https://leetcode.com/api/submissions/?offset=' +
-        page * PAGE_SIZE +
-        '&limit=' +
-        PAGE_SIZE +
-        '&lastkey='
-      const res = await fetch(url, {
+// Batch difficulty lookups so imported rows carry an accurate difficulty tag,
+// not a placeholder. Builds an aliased query per chunk and maps back to slugs.
+async function fetchDifficulties(slugs) {
+  const difficultyBySlug = new Map()
+  const csrf = getCsrfToken()
+  for (let i = 0; i < slugs.length; i += DIFF_CHUNK) {
+    const chunk = slugs.slice(i, i + DIFF_CHUNK)
+    const fields = chunk
+      .map((slug, j) => `q${j}: question(titleSlug: ${JSON.stringify(slug)}) { difficulty }`)
+      .join('\n')
+    const query = `query { ${fields} }`
+    let res
+    try {
+      res = await fetch('https://leetcode.com/graphql', {
+        method: 'POST',
         credentials: 'include',
-        headers: { accept: 'application/json' },
+        headers: {
+          'content-type': 'application/json',
+          'x-csrftoken': csrf || '',
+          'x-requested-with': 'XMLHttpRequest',
+          referer: window.location.href,
+        },
+        body: JSON.stringify({ query }),
       })
-      if (!res.ok) break
-      const json = await res.json()
-      const dump = Array.isArray(json.submissions_dump) ? json.submissions_dump : []
-      if (!dump.length) break
-      totalFetched += dump.length
-      mergeAccepted(memo, dump)
-      log(
-        '[api/submissions] page',
-        page + 1,
-        'entries:',
-        dump.length,
-        '| unique accepted so far:',
-        memo.size,
-      )
-      if (json.has_next !== true) break
+    } catch {
+      continue
     }
-  } catch (e) {
-    log('[api/submissions] fetch failed:', e instanceof Error ? e.message : String(e))
-    return { ok: false, memo }
+    const json = await res.json().catch(() => null)
+    const data = json?.data
+    if (!data) continue
+    chunk.forEach((slug, j) => {
+      const diff = data[`q${j}`]?.difficulty
+      if (diff) difficultyBySlug.set(slug, diff.toLowerCase())
+    })
+  }
+  return difficultyBySlug
+}
+
+function findAstray(text) {
+  return (text || '').trim()
+}
+
+function showStatus(text, color) {
+  const el = document.getElementById('dsa-sync-status')
+  if (!el) return
+  el.textContent = text
+  el.style.color = color || '#e6edf3'
+  el.style.opacity = 1
+  if (text.startsWith('✓') || text.startsWith('✕')) {
+    setTimeout(() => { el.style.opacity = 0 }, 6000)
+  }
+}
+
+async function runSync() {
+  const btn = document.getElementById('dsa-sync-btn')
+  if (!btn || btn.dataset.running === '1') return
+
+  const { token } = await chrome.storage.local.get('token')
+  if (!token) {
+    showStatus('✕ No DSA Master token. Open the extension and connect first.', '#f87171')
+    return
   }
 
-  log('[api/submissions] TOTAL fetched:', totalFetched, '| UNIQUE accepted:', memo.size)
-  return { ok: true, memo }
-}
-
-function summarize(memo, source) {
-  const accepted = [...memo.values()].sort((a, b) => a.timestamp - b.timestamp)
-  log(
-    source,
-    '— UNIQUE accepted problems:',
-    accepted.length,
-    '| earliest:',
-    accepted[0]?.titleSlug,
-    accepted[0] ? new Date(accepted[0].timestamp * 1000).toISOString() : '',
-    '| latest:',
-    accepted[accepted.length - 1]?.titleSlug,
-    accepted[accepted.length - 1]
-      ? new Date(accepted[accepted.length - 1].timestamp * 1000).toISOString()
-      : '',
-  )
-  log(
-    source,
-    '— accepted problems (slug, first-solved):',
-    accepted.map((a) => ({
-      slug: a.titleSlug,
-      timestamp: a.timestamp,
-      when: new Date(a.timestamp * 1000).toISOString(),
-    })),
-  )
-}
-
-;(async () => {
+  btn.dataset.running = '1'
+  btn.textContent = '⟳ Syncing…'
   try {
-    const forceRerun =
-      new URL(window.location.href).searchParams.get('dsa_lc_import_rerun') === '1'
-    if (!forceRerun && sessionStorage.getItem(RUN_FLAG)) return
-    sessionStorage.setItem(RUN_FLAG, '1')
-    log('running console-only import probe…')
+    const { accepted } = await collectAcceptedHistory((page, fetched, unique) => {
+      btn.textContent = `⟳ Syncing… page ${page}`
+      showStatus(`Scraping LeetCode… ${fetched} submissions · ${unique} unique accepted`, '#a1a1aa')
+    })
 
-    const graph = await tryGraphqlSubmissionList()
-    if (graph.ok && graph.memo.size > 0) {
-      summarize(graph.memo, '[graphql submissionList]')
+    if (accepted.length === 0) {
+      showStatus('✕ No accepted submissions found on this account.', '#f87171')
       return
     }
-    const legacy = await tryLegacySubmissionsApi()
-    if (legacy.ok && legacy.memo.size > 0) {
-      summarize(legacy.memo, '[api/submissions]')
+
+    showStatus(`Fetching difficulties… (${accepted.length} problems)`, '#a1a1aa')
+    const difficultyBySlug = await fetchDifficulties(accepted.map((a) => a.titleSlug))
+
+    const problems = accepted.map((a) => ({
+      slug: a.titleSlug,
+      title: findAstray(a.title),
+      timestamp: a.timestamp,
+      difficulty: difficultyBySlug.get(a.titleSlug) || 'easy',
+    }))
+
+    btn.textContent = '⟳ Uploading…'
+    let res
+    try {
+      res = await chrome.runtime.sendMessage({ type: 'dsa-import-leetcode', payload: { problems } })
+    } catch (e) {
+      showStatus('✕ Can’t reach DSA Master. Reload the extension.', '#f87171')
       return
     }
-    log('no data captured. Check the page logs above for errors.')
+
+    if (res && res.ok) {
+      const dupes = (res.duplicates || 0)
+      const more = res.imported_more ? ' (partial — run again to continue)' : ''
+      showStatus(
+        `✓ Imported ${res.inserted} new problem${res.inserted === 1 ? '' : 's'}${dupes ? ` · ${dupes} already tracked` : ''}${more}`,
+        '#34d399'
+      )
+      btn.textContent = '⟳ Sync to DSA Master'
+    } else {
+      const err =
+        res?.error === 'NO_TOKEN'
+          ? 'No token found. Open the extension and connect first.'
+          : res?.error || 'Something went wrong. Try again.'
+      showStatus('✕ ' + err, '#f87171')
+    }
   } catch (e) {
-    log('unexpected error:', e instanceof Error ? e.message : String(e))
+    showStatus('✕ ' + (e instanceof Error ? e.message : String(e)), '#f87171')
+  } finally {
+    btn.textContent = '⟳ Sync to DSA Master'
+    delete btn.dataset.running
   }
+}
+
+function injectSyncUI() {
+  if (document.getElementById('dsa-sync-btn')) return
+
+  const pill = document.createElement('div')
+  pill.id = 'dsa-sync-btn'
+  pill.textContent = '⟳ Sync to DSA Master'
+  pill.style.cssText = `
+    position: fixed;
+    left: 16px;
+    bottom: 140px;
+    z-index: 99998;
+    padding: 8px 14px;
+    border-radius: 999px;
+    background: #18181b;
+    border: 1px solid #3f3f46;
+    color: #d4d4d8;
+    font-family: -apple-system, sans-serif;
+    font-size: 12px;
+    cursor: pointer;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    user-select: none;
+  `
+  pill.addEventListener('click', runSync)
+  pill.addEventListener('mouseenter', () => (pill.style.borderColor = '#00e4b8'))
+  pill.addEventListener('mouseleave', () => (pill.style.borderColor = '#3f3f46'))
+  document.body.appendChild(pill)
+
+  const status = document.createElement('div')
+  status.id = 'dsa-sync-status'
+  status.style.cssText = `
+    position: fixed;
+    left: 16px;
+    bottom: 112px;
+    z-index: 99997;
+    max-width: 340px;
+    padding: 0 4px;
+    font-family: -apple-system, sans-serif;
+    font-size: 11px;
+    color: #e6edf3;
+    opacity: 0;
+    transition: opacity 0.2s;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+  `
+  document.body.appendChild(status)
+}
+
+function maybeAutoRun() {
+  const force =
+    new URL(window.location.href).searchParams.get('dsa_lc_sync') === '1'
+  if (!force) return
+  setTimeout(runSync, 800)
+}
+
+;(() => {
+  injectSyncUI()
+  maybeAutoRun()
 })()

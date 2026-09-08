@@ -59,7 +59,8 @@ export default function ReviewClient({ problem }: { problem: Problem }) {
     const dailyCommitment = settings?.daily_commitment ?? 5
 
     const { newStability, nextReviewDate: idealDate } = calculateNextReview({
-      stability: problem.stability,
+      // First review of an imported/unreviewed problem starts from 1, not 0.
+      stability: problem.review_count === 0 ? 1 : problem.stability,
       feltDifficulty,
       hintUsed
     })

@@ -64,8 +64,13 @@ export async function POST(request: NextRequest) {
       .maybeSingle()
 
     if (existing) {
+      // Imported backlog rows sit at stability 0 until first review — treat their
+      // first review as a fresh solve so FSRS ramps up from 1 instead of 0.
+      const baseStability =
+        existing.review_count === 0 && existing.stability === 0 ? 1 : existing.stability
+
       const { newStability, nextReviewDate: idealDate } = calculateNextReview({
-        stability: existing.stability,
+        stability: baseStability,
         feltDifficulty: cleanFeltDifficulty,
         hintUsed: cleanHintUsed
       })
