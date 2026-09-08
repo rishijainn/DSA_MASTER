@@ -9,7 +9,8 @@
 //
 // How to test: log into LeetCode, open any /problems/* page in the same browser,
 // reload the extension first, then open the devtools console and look for
-// `[dsa-master:leetcode-import]` lines.
+// `[dsa-master:leetcode-import]` lines. To re-run without opening a new tab, add
+// `?dsa_lc_import_rerun=1` to the problem URL (or clear sessionStorage).
 
 const TAG = '[dsa-master:leetcode-import]'
 const RUN_FLAG = 'dsa_master_lc_import_run'
@@ -23,40 +24,90 @@ function getCsrfToken() {
   return match ? match[1] : null
 }
 
-// Prioritized strategies. Each is tot server-side; we log every outcome so the
-// working one becomes obvious from the console.
+const ACCEPTED = 10 // LeetCode numeric status for Accepted
+
+function isAccepted(entry) {
+  return (
+    entry.status_display === 'Accepted' ||
+    entry.statusDisplay === 'Accepted' ||
+    Number(entry.status) === ACCEPTED
+  )
+}
+
+// Strategy 1 — LeetCode's classic authenticated submissions API (200 OK, works).
+// Paged with offset/lastkey. Logs schema + full accepted list.
 async function tryLegacySubmissionsApi() {
   try {
-    const res = await fetch(
-      'https://leetcode.com/api/submissions/?offset=0&limit=100',
-      {
+    const MAX_PAGES = 10
+    let lastKey = ''
+    let totalFetched = 0
+    let page = 0
+    let firstKeys = null
+    let hasNext = false
+
+    const accepted = []
+
+    do {
+      const url =
+        'https://leetcode.com/api/submissions/?offset=' +
+        Math.min(page * 20, 200) +
+        '&limit=20&lastkey=' +
+        encodeURIComponent(lastKey)
+      const res = await fetch(url, {
         credentials: 'include',
         headers: { accept: 'application/json' },
-      },
-    )
-    log('[api/submissions] HTTP', res.status)
-    if (!res.ok) return
-    const json = await res.json()
-    const dump = Array.isArray(json.submissions_dump) ? json.submissions_dump : []
-    const accepted = dump.filter((s) => s.statusDisplay === 'Accepted')
+      })
+      log('[api/submissions] page', page + 1, 'HTTP', res.status)
+      if (!res.ok) break
+
+      const json = await res.json()
+      if (firstKeys === null) {
+        firstKeys = Object.keys(json)
+        const firstDumpEntry = json.submissions_dump?.[0]
+        log(
+          '[api/submissions] response keys:',
+          firstKeys,
+          firstDumpEntry ? '| first entry keys: ' + Object.keys(firstDumpEntry) : '',
+        )
+      }
+
+      const dump = Array.isArray(json.submissions_dump) ? json.submissions_dump : []
+      totalFetched += dump.length
+      for (const entry of dump) {
+        if (isAccepted(entry) && !accepted.some((a) => a.id === entry.id)) {
+          accepted.push({
+            id: entry.id,
+            title: entry.title,
+            titleSlug: entry.title_slug || entry.titleSlug,
+            timestamp: entry.timestamp,
+            status_display: entry.status_display,
+            lang: entry.lang,
+          })
+        }
+      }
+
+      log(
+        '[api/submissions] page',
+        page + 1,
+        'entries:',
+        dump.length,
+        '| accepted so far:',
+        accepted.length,
+      )
+
+      lastKey = json.next_key_dump || json.hasNext_key || ''
+      hasNext = json.has_next === true || json.hasNext === true
+      page++
+    } while (hasNext && lastKey !== '' && page < MAX_PAGES)
+
+    log('[api/submissions] TOTAL fetched:', totalFetched, '| ACCEPTED:', accepted.length)
     log(
-      '[api/submissions] submissions in page:',
-      dump.length,
-      '| accepted:',
-      accepted.length,
-      '| hasNext:',
-      !!json.hasNext,
-      '| lastKey:',
-      json.has_next === false ? null : json.next_key_dump || null,
-    )
-    log(
-      '[api/submissions] accepted sample:',
-      accepted.slice(0, 10).map((s) => ({
-        title: s.title,
-        titleSlug: s.title_slug,
-        timestamp: s.timestamp,
-        time: s.time,
-        lang: s.lang,
+      '[api/submissions] accepted problems (slug, timestamp, when):',
+      accepted.map((a) => ({
+        title: a.title,
+        slug: a.titleSlug,
+        timestamp: a.timestamp,
+        when: a.timestamp ? new Date(Number(a.timestamp) * 1000).toISOString() : 'n/a',
       })),
     )
   } catch (e) {
@@ -64,6 +115,8 @@ async function tryLegacySubmissionsApi() {
   }
 }
 
+// Strategy 2 — GraphQL submissionList. Unknown signature in 2026; we log the body
+// so the error is visible instead of guessing.
 async function tryGraphqlSubmissionList() {
   const csrf = getCsrfToken()
   const query = `
@@ -98,9 +151,19 @@ async function tryGraphqlSubmissionList() {
       }),
     })
     log('[graphql submissionList] HTTP', res.status)
-    if (!res.ok) return
-    const json = await res.json()
-    log('[graphql submissionList] errors:', json.errors ?? 'none')
+    const text = await res.text()
+    let json = null
+    try {
+      json = JSON.parse(text)
+    } catch {
+      json = null
+    }
+    if (json?.errors) {
+      log(
+        '[graphql submissionList] errors:',
+        json.errors.map((el) => el.message),
+      )
+    }
     const subs = json?.data?.submissionList?.submissions
     log('[graphql submissionList] submissions:', Array.isArray(subs) ? subs.length : 0)
     if (Array.isArray(subs)) {
@@ -114,32 +177,22 @@ async function tryGraphqlSubmissionList() {
   }
 }
 
+// Strategy 3 — public counts (control; proves anonymity is not the issue).
 async function tryGraphqlCounts() {
   const query = `
     query getUserProfile($username: String!) {
       matchedUser(username: $username) {
         username
         submitStats {
-          acSubmissionNum {
-            difficulty
-            count
-          }
+          acSubmissionNum { difficulty count }
         }
       }
     }
   `
-  // detect the logged-in user (the profile banner shows it, but we can't read it —
-  // matchedUser without the handle is not available unauthenticated, so we skip
-  // the handle entirely and just report whether any public profile resolves for a
-  // known probe). Instead, rely on the two authed strategies above; this third
-  // one confirms aggregate counts still work without auth.
   try {
     const res = await fetch('https://leetcode.com/graphql', {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        accept: 'application/json',
-      },
+      headers: { 'content-type': 'application/json', accept: 'application/json' },
       body: JSON.stringify({
         query,
         variables: { username: 'neetcode' },
@@ -147,8 +200,12 @@ async function tryGraphqlCounts() {
       }),
     })
     const json = await res.json()
-    log('[graphql counts] HTTP', res.status, '| probe neetcode totals:',
-      json?.data?.matchedUser?.submitStats?.acSubmissionNum ?? 'n/a')
+    log(
+      '[graphql counts] HTTP',
+      res.status,
+      '| probe neetcode totals:',
+      json?.data?.matchedUser?.submitStats?.acSubmissionNum ?? 'n/a',
+    )
   } catch (e) {
     log('[graphql counts] fetch failed:', e instanceof Error ? e.message : String(e))
   }
@@ -156,9 +213,10 @@ async function tryGraphqlCounts() {
 
 ;(async () => {
   try {
-    if (sessionStorage.getItem(RUN_FLAG)) return
+    const forceRerun = new URL(window.location.href).searchParams.get('dsa_lc_import_rerun') === '1'
+    if (!forceRerun && sessionStorage.getItem(RUN_FLAG)) return
     sessionStorage.setItem(RUN_FLAG, '1')
-    log('running console-only import probe (one tab session)…')
+    log('running console-only import probe…')
     await tryLegacySubmissionsApi()
     await tryGraphqlSubmissionList()
     await tryGraphqlCounts()
