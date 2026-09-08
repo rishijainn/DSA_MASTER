@@ -17,7 +17,7 @@
 
 const TAG = '[dsa-master:leetcode-import]'
 const RUN_FLAG = 'dsa_master_lc_import_run'
-const MAX_PAGES = 50
+const MAX_PAGES = 120 // covers ~2,400 rows (LeetCode returns ~20/page)
 const PAGE_SIZE = 50
 
 function log(...args) {
@@ -130,7 +130,9 @@ async function tryGraphqlSubmissionList() {
         lastKey = nextKey
         offset = 0
       } else {
-        offset += PAGE_SIZE // cursor absent or stale → offset fallback
+        // LeetCode caps each page (~20 rows) regardless of limit — step offset by
+        // how many rows we actually got so no slice of history is skipped.
+        offset += Math.max(subs.length, 1)
       }
     }
   } catch (e) {
