@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import { getRankInfo } from '@/lib/rank'
 
 interface Problem {
@@ -11,6 +12,16 @@ interface Problem {
   review_count: number
   leetcode_url: string
   leetcode_slug: string
+}
+
+// Imported problems sitting in the backlog — never reviewed yet, so nothing is
+// scheduled and they're not part of the daily queue / streak / rank.
+interface UnreviewedProblem {
+  id: string
+  title: string
+  difficulty: string
+  leetcode_slug: string
+  leetcode_url: string
 }
 
 // One day's activity for the streak heatmap - count is how many problems
@@ -35,6 +46,7 @@ interface Props {
   activityData: ActivityDay[]
   streakWindow: string[]
   userName: string
+  unreviewedProblems: UnreviewedProblem[]
 }
 
 const BG = '#0d1117'
@@ -146,6 +158,38 @@ function RankProfileCard({ rankInfo, userName, totalCount, totalReviewed, comple
         </div>
       </div>
     </div>
+  )
+}
+
+// Imported backlog row — links straight into the normal review flow so solving
+// one behaves exactly like a scheduled review.
+function UnreviewedQuestRow({ problem, index }: { problem: UnreviewedProblem; index: number }) {
+  const config = getDifficultyConfig(problem.difficulty);
+  return (
+    <Link
+      href={`/review/${problem.id}`}
+      style={{
+        background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, padding: '10px 12px',
+        display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none',
+        transition: 'border-color 0.15s',
+      }}
+      onMouseEnter={e => (e.currentTarget.style.borderColor = `${PURPLE}50`)}
+      onMouseLeave={e => (e.currentTarget.style.borderColor = BORDER)}
+    >
+      <div style={{
+        width: 32, height: 32, borderRadius: 8, background: config.bg, border: `1px solid ${config.border}`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', color: config.color, fontWeight: 800, fontFamily: MONO, flexShrink: 0,
+      }}>
+        {config.label}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ color: MUTED, fontSize: 9, fontFamily: MONO }}>UNREVIEWED #{String(index + 1).padStart(4, '0')} · never reviewed</div>
+        <div style={{ color: TEXT, fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{problem.title}</div>
+      </div>
+      <div style={{ background: `${PURPLE}12`, border: `1px solid ${PURPLE}30`, color: PURPLE, padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
+        Solve & review →
+      </div>
+    </Link>
   )
 }
 
@@ -364,12 +408,14 @@ function CodingStreakHeatmap({ activityData, currentStreak, longestStreak, strea
 
 export default function DashboardClient({
   shownProblems, queueCount, overdueCount, recentProblems, dailyCommitment, isBacklogged,
-  totalCount, streak, longestStreak, streakActive, activityData, streakWindow, userName,
+  totalCount, streak, longestStreak, streakActive, activityData, streakWindow, userName, unreviewedProblems,
 }: Props) {
   const totalReviewed = recentProblems.reduce((a, p) => a + (p.review_count ?? 0), 0);
   const rankInfo = getRankInfo(totalCount);
   const completionPct = shownProblems.length === 0 ? 100 : Math.round((dailyCommitment - shownProblems.length) / dailyCommitment * 100);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [unreviewedShown, setUnreviewedShown] = useState(5);
+  const unreviewedVisible = unreviewedProblems.slice(0, unreviewedShown);
 
   // Check for stale streak on mount (user missed a day → reset to 0)
   useEffect(() => {
@@ -569,6 +615,31 @@ export default function DashboardClient({
                   </div>
                 )}
               </div>
+
+              {unreviewedProblems.length > 0 && (
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+                    <div>
+                      <div style={{ fontSize: 17, fontWeight: 800, color: PURPLE }}>Unreviewed Problems</div>
+                      <div style={{ color: SUBTEXT, fontSize: 12 }}>Imported from your history — solve any, no daily limit</div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {unreviewedVisible.map((p, i) => <UnreviewedQuestRow key={p.id} problem={p} index={i} />)}
+                  </div>
+                  {unreviewedProblems.length > unreviewedShown && (
+                    <button
+                      onClick={() => setUnreviewedShown(unreviewedShown + 5)}
+                      style={{
+                        marginTop: 10, width: '100%', background: `${PURPLE}0a`, border: `1px solid ${PURPLE}25`,
+                        color: PURPLE, padding: '8px 0', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                      }}
+                    >
+                      Show more ({Math.min(5, unreviewedProblems.length - unreviewedShown)} more)
+                    </button>
+                  )}
+                </div>
+              )}
 
               <div style={{ background: `linear-gradient(135deg, ${CARD}, ${BG})`, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 14 }}>
                 <div style={{ fontWeight: 700, marginBottom: 10, fontSize: 13 }}>Performance</div>

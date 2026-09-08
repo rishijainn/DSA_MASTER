@@ -17,7 +17,7 @@ export default async function DashboardPage() {
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
   // Run all independent queries in parallel
-  const [settingsRes, todayRes, overdueRes, allRes, countRes, reviewRes, problemRes] = await Promise.all([
+  const [settingsRes, todayRes, overdueRes, allRes, countRes, reviewRes, problemRes, unreviewedRes] = await Promise.all([
     supabase.from("user_settings").select("daily_commitment, current_streak, longest_streak, last_activity_date, username").eq("user_id", user.id).single(),
     supabase.from("problems").select("*").eq("user_id", user.id).eq("next_review_date", today).order("next_review_date", { ascending: true }),
     supabase.from("problems").select("*", { count: "exact", head: true }).eq("user_id", user.id).lt("next_review_date", today),
@@ -25,6 +25,9 @@ export default async function DashboardPage() {
     supabase.from("problems").select("*", { count: "exact", head: true }).eq("user_id", user.id).not("next_review_date", "is", null),
     supabase.from("review_logs").select("reviewed_at, problem_id").eq("user_id", user.id).gte("reviewed_at", sixMonthsAgo.toISOString()),
     supabase.from("problems").select("id, created_at, next_review_date").eq("user_id", user.id),
+    // Imported backlog — never reviewed, no date scheduled yet. Not part of the
+    // daily queue, rank, or streak until they get their first review.
+    supabase.from("problems").select("id, title, difficulty, leetcode_slug, leetcode_url").eq("user_id", user.id).is("next_review_date", null).order("created_at", { ascending: false }),
   ]);
 
   const settings = settingsRes.data;
@@ -34,6 +37,7 @@ export default async function DashboardPage() {
   const totalCount = countRes.count;
   const reviewRows = reviewRes.data;
   const problemRows = problemRes.data;
+  const unreviewedProblems = unreviewedRes.data ?? [];
 
   const seen = new Set();
   const uniqueProblems = (allProblems ?? [])
@@ -135,6 +139,7 @@ export default async function DashboardPage() {
       activityData={activityData}
       streakWindow={streakWindow}
       userName={userName}
+      unreviewedProblems={unreviewedProblems}
     />
   );
 }
