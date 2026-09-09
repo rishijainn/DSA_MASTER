@@ -16,7 +16,8 @@ export default async function ProgressPage() {
   const { count: totalCount } = await supabase
     .from("problems")
     .select("*", { count: "exact", head: true })
-    .eq("user_id", user.id);
+    .eq("user_id", user.id)
+    .gt("stability", 0);
 
   return (
     <ProgressClient

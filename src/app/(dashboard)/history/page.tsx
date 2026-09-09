@@ -12,6 +12,7 @@ export default async function HistoryPage() {
         .from('problems')
         .select('*')
         .eq('user_id', user.id)
+        .gt('stability', 0)
         .order('created_at', { ascending: false })
 
     return <HistoryClient problems={problems ?? []} />
