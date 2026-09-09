@@ -1,6 +1,7 @@
 'use client'
 
-import { useRef, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import Link from 'next/link'
 import {
   motion,
   useReducedMotion,
@@ -9,6 +10,8 @@ import {
   useSpring,
   useTransform,
   useMotionTemplate,
+  useInView,
+  animate,
 } from 'framer-motion'
 
 const CHROME_STORE_URL = '#'
@@ -250,13 +253,13 @@ function Hero() {
           }}
         >
           <motion.div initial={reduce ? { opacity: 0 } : { opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-            <a
+            <Link
               href="/"
               style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}
             >
               <img src="/favicon.svg" alt="" style={{ width: 40, height: 40, borderRadius: 10 }} />
               <span style={{ color: TEXT, fontWeight: 800, letterSpacing: '-0.01em' }}>DSA MASTER</span>
-            </a>
+            </Link>
           </motion.div>
           <motion.div
             initial={reduce ? { opacity: 0 } : { opacity: 0, y: -8 }}
@@ -270,6 +273,13 @@ function Hero() {
               style={{ color: SUBTEXT, fontSize: 14, textDecoration: 'none' }}
             >
               How it works
+            </a>
+            <a
+              href="#import"
+              className="hidden md:inline"
+              style={{ color: SUBTEXT, fontSize: 14, textDecoration: 'none' }}
+            >
+              Import history
             </a>
             <a
               href="/login"
@@ -1202,6 +1212,384 @@ function FinalCTA() {
 }
 
 // ---------------------------------------------------------------------------
+// LEETCODE IMPORT
+// ---------------------------------------------------------------------------
+
+const LC_ORANGE = '#ffa116'
+
+type ImportStage = 'scrape' | 'difficulty' | 'upload' | 'done'
+
+const IMPORT_SEGMENTS: { from: number; to: number; stage: ImportStage }[] = [
+  { from: 0, to: 0.42, stage: 'scrape' },
+  { from: 0.42, to: 0.66, stage: 'difficulty' },
+  { from: 0.66, to: 0.86, stage: 'upload' },
+  { from: 0.86, to: 1, stage: 'done' },
+]
+
+function SegmentChip({ stage, i, active }: { stage: ImportStage; i: number; active: boolean }) {
+  const labels: Record<ImportStage, string> = {
+    scrape: 'Scanning',
+    difficulty: 'Difficulty',
+    upload: 'Uploading',
+    done: 'Done',
+  }
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 6,
+        padding: '5px 10px', borderRadius: 999,
+        background: active ? `${BLUE}14` : 'transparent',
+        border: `1px solid ${active ? `${BLUE}40` : BORDER}`,
+        color: active ? BLUE : MUTED,
+        transition: 'all 0.3s ease',
+      }}>
+        <span style={{ fontSize: 10, fontWeight: 800, fontFamily: MONO }}>{active ? i + 1 : '✓'}</span>
+        <span style={{ fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>{labels[stage]}</span>
+      </div>
+      {stage !== 'done' && <span style={{ color: BORDER, fontSize: 10 }}>→</span>}
+    </div>
+  )
+}
+
+function ImportPreview() {
+  const reduce = useReducedMotion()
+  const ref = useRef<HTMLDivElement>(null)
+  const inView = useInView(ref, { amount: 0.35 })
+  const t = useMotionValue(0)
+  const [tick, setTick] = useState(() => (reduce ? 1 : 0))
+
+  // Throttle the motion-value stream to React state so we don't re-render 60×/s
+  useEffect(() => {
+    const unsub = t.on('change', (latest) => setTick(Math.round(latest * 100) / 100))
+    return unsub
+  }, [t])
+
+  // Self-looping timeline: only runs while the section is visible.
+  useEffect(() => {
+    if (reduce) {
+      t.set(1)
+      return
+    }
+    if (!inView) return
+    let controls: ReturnType<typeof animate> | undefined
+    let holdTimer: ReturnType<typeof setTimeout> | undefined
+    const run = () => {
+      t.stop()
+      t.set(0)
+      controls = animate(t, 1, {
+        duration: 8.5,
+        ease: 'linear',
+        onComplete: () => {
+          holdTimer = setTimeout(run, 2600)
+        },
+      })
+    }
+    run()
+    return () => {
+      controls?.stop()
+      if (holdTimer) clearTimeout(holdTimer)
+    }
+  }, [inView, reduce, t])
+
+  let stage: ImportStage = 'scrape'
+  let prog = 0
+  for (const seg of IMPORT_SEGMENTS) {
+    if (tick >= seg.from && tick < seg.to) {
+      stage = seg.stage
+      prog = (tick - seg.from) / (seg.to - seg.from)
+      break
+    }
+  }
+  if (tick >= 0.999) stage = 'done'
+
+  const pages = 1 + Math.floor(prog * 17) // 1..18
+  const scanned = Math.round(1924 * prog)
+  const accepted = Math.round(258 * prog)
+  const diffDone = Math.round(258 * prog)
+  const uploadPct = prog
+
+  const stageChips: ImportStage[] = ['scrape', 'difficulty', 'upload', 'done']
+  const activeIdx = stageChips.indexOf(stage)
+
+  return (
+    <section id="import" ref={ref} style={{ padding: '40px 0 120px', position: 'relative' }}>
+      <div
+        aria-hidden
+        style={{
+          position: 'absolute',
+          top: '15%',
+          left: '-8%',
+          width: 480,
+          height: 480,
+          background: 'radial-gradient(closest-side, rgba(255,161,22,0.08), transparent)',
+          pointerEvents: 'none',
+        }}
+      />
+      <div style={container as React.CSSProperties}>
+        <SectionHeading
+          eyebrow="LeetCode Import"
+          title={
+            <>
+              Your whole history,
+              <br />
+              <Gradient>one click in.</Gradient>
+            </>
+          }
+          subtitle="Installed once, your LeetCode backlog is yours. The extension walks every submission you've ever made and turns it into a reviewable queue."
+        />
+
+        <div
+          className="grid items-center gap-10 md:grid-cols-[440px_minmax(0,1fr)]"
+          style={{ alignItems: 'center' }}
+        >
+          {/* Copy column */}
+          <div>
+            <FadeUp delay={0.05}>
+              <div style={{ display: 'flex', gap: 12, marginBottom: 18 }}>
+                {[
+                  { label: 'LEETCODE', color: LC_ORANGE },
+                  { label: 'GFG', color: GREEN },
+                  { label: 'DSA MASTER', color: BLUE },
+                ].map((b, i) => (
+                  <span key={b.label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span
+                      style={{
+                        fontFamily: MONO, fontSize: 10, letterSpacing: '0.08em',
+                        color: b.color, border: `1px solid ${b.color}44`,
+                        background: `${b.color}12`, padding: '5px 10px', borderRadius: 8,
+                      }}
+                    >
+                      {b.label}
+                    </span>
+                    {i < 2 && <span style={{ color: MUTED, fontSize: 11 }}>→</span>}
+                  </span>
+                ))}
+              </div>
+            </FadeUp>
+            <FadeUp delay={0.1}>
+              <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {[
+                  { title: 'Zero manual logging', desc: 'Trigger the import from Settings once — the extension does the walking.' },
+                  { title: 'Unreviewed by design', desc: 'Imported problems never count toward your rank until you genuinely review them.' },
+                  { title: 'Keeps in sync', desc: 'Every new solve after import is tracked automatically by the extension.', color: BLUE },
+                ].map((f) => (
+                  <li key={f.title} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                    <span
+                      style={{
+                        width: 20, height: 20, borderRadius: 7, marginTop: 1, flexShrink: 0,
+                        background: `${BLUE}14`, border: `1px solid ${BLUE}40`, color: BLUE,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}
+                    >
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                    </span>
+                    <div>
+                      <div style={{ color: TEXT, fontWeight: 700, fontSize: 14.5 }}>{f.title}</div>
+                      <div style={{ color: SUBTEXT, fontSize: 13.5, lineHeight: 1.55, marginTop: 2 }}>{f.desc}</div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </FadeUp>
+            <FadeUp delay={0.16}>
+              <a
+                href="/login"
+                style={{
+                  marginTop: 24, display: 'inline-flex', alignItems: 'center', gap: 8,
+                  background: GRADIENT, color: '#0d1117', fontWeight: 800, fontSize: 14,
+                  padding: '13px 22px', borderRadius: 11, textDecoration: 'none',
+                  boxShadow: '0 0 36px -10px rgba(88,166,255,0.6)',
+                }}
+              >
+                Import on the app <span>→</span>
+              </a>
+            </FadeUp>
+          </div>
+
+          {/* Animated import window */}
+          <FadeUp y={34}>
+            <div style={{ perspective: 1200 }}>
+              <motion.div
+                initial={reduce ? { opacity: 0 } : { opacity: 0, rotateX: 14, y: 40 }}
+                animate={reduce ? { opacity: 1 } : { opacity: 1, rotateX: 3, y: 0 }}
+                transition={reduce ? { duration: 0.3 } : { duration: 0.7, ease: EASE }}
+                style={{
+                  borderRadius: 18,
+                  border: `1px solid ${BORDER}`,
+                  background: BG,
+                  overflow: 'hidden',
+                  boxShadow: '0 40px 120px -30px rgba(255,161,22,0.18), 0 1px 0 rgba(255,255,255,0.03) inset',
+                  ...(reduce ? {} : { transformStyle: 'preserve-3d' }),
+                }}
+              >
+                {/* window chrome */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', borderBottom: `1px solid ${BORDER}`, background: CARD }}>
+                  <span style={{ width: 10, height: 10, borderRadius: 999, background: RED }} />
+                  <span style={{ width: 10, height: 10, borderRadius: 999, background: GOLD }} />
+                  <span style={{ width: 10, height: 10, borderRadius: 999, background: GREEN }} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 12, fontFamily: MONO, fontSize: 11, color: SUBTEXT }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <span style={{ width: 7, height: 7, borderRadius: 999, background: LC_ORANGE, display: 'inline-block' }} />
+                      leetcode.com/problems
+                    </span>
+                    <span style={{ color: MUTED }}>→</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 5, color: TEXT }}>
+                      <span style={{ width: 7, height: 7, borderRadius: 999, background: BLUE, display: 'inline-block' }} />
+                      settings
+                    </span>
+                  </div>
+                  <div style={{ marginLeft: 'auto', fontFamily: MONO, fontSize: 10, letterSpacing: '0.08em', color: GREEN, border: `1px solid ${GREEN}33`, background: `${GREEN}0d`, borderRadius: 999, padding: '3px 9px' }}>
+                    AUTO-SYNC ON
+                  </div>
+                </div>
+
+                {/* transfer dash */}
+                <div style={{ position: 'relative', padding: '20px 20px 0' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ width: 12, height: 12, borderRadius: 4, background: LC_ORANGE }} />
+                      <span style={{ fontFamily: MONO, fontSize: 11, color: SUBTEXT }}>your history</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontFamily: MONO, fontSize: 11, color: SUBTEXT }}>your backlog</span>
+                      <span style={{ width: 12, height: 12, borderRadius: 4, background: BLUE }} />
+                    </div>
+                  </div>
+                  <div style={{ position: 'relative', height: 2, background: BORDER, borderRadius: 999, margin: '10px 4px 0' }}>
+                    <div
+                      className="lc-dot"
+                      style={{
+                        position: 'absolute', top: '50%', width: 8, height: 8,
+                        transform: 'translate(-50%, -50%)',
+                        background: GRADIENT, borderRadius: 999,
+                        boxShadow: '0 0 12px 2px rgba(88,166,255,0.7)',
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ padding: 18 }}>
+                  {/* stage chips */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18, flexWrap: 'wrap' }}>
+                    {stageChips.map((s, i) => (
+                      <SegmentChip key={s} stage={s} i={i} active={i === activeIdx} />
+                    ))}
+                  </div>
+
+                  {/* dynamic stage body */}
+                  <div style={{ minHeight: 168, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 18 }}>
+                    {stage === 'scrape' && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        {[
+                          { label: 'PAGE', value: `${pages} / 18`, color: BLUE },
+                          { label: 'SUBMISSIONS SCANNED', value: scanned.toLocaleString('en-US'), color: TEXT },
+                          { label: 'UNIQUE ACCEPTED', value: String(accepted), color: LC_ORANGE },
+                        ].map((r) => (
+                          <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <span style={{ fontFamily: MONO, fontSize: 10, letterSpacing: '0.14em', color: MUTED }}>{r.label}</span>
+                            <span style={{ fontFamily: MONO, fontSize: 17, fontWeight: 800, color: r.color }}>{r.value}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {stage === 'difficulty' && (() => {
+                      const c = 2 * Math.PI * 20
+                      const pct = diffDone / 258
+                      return (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
+                          <div style={{ position: 'relative', width: 60, height: 60, flexShrink: 0 }}>
+                            <svg width="60" height="60" viewBox="0 0 60 60">
+                              <circle cx="30" cy="30" r="20" fill="none" stroke={BORDER} strokeWidth="5" />
+                              <circle cx="30" cy="30" r="20" fill="none" stroke={LC_ORANGE} strokeWidth="5" strokeLinecap="round"
+                                strokeDasharray={c} strokeDashoffset={c * (1 - pct)} transform="rotate(-90 30 30)"
+                                style={{ transition: 'stroke-dashoffset 0.15s linear' }} />
+                            </svg>
+                            <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: LC_ORANGE, fontSize: 12, fontWeight: 800, fontFamily: MONO }}>
+                              {Math.round(pct * 100)}%
+                            </span>
+                          </div>
+                          <div>
+                            <div style={{ color: TEXT, fontSize: 13.5, fontWeight: 700, marginBottom: 4 }}>Tagging each solved problem with its difficulty</div>
+                            <div style={{ color: SUBTEXT, fontSize: 12, fontFamily: MONO }}>{diffDone} / 258</div>
+                          </div>
+                        </div>
+                      )
+                    })()}
+
+                    {stage === 'upload' && (
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+                          <span style={{ color: TEXT, fontSize: 13.5, fontWeight: 700 }}>Sending to your DSA Master account</span>
+                          <span style={{ color: BLUE, fontSize: 11, fontFamily: MONO, fontWeight: 700 }}>258 problems</span>
+                        </div>
+                        <div style={{ height: 8, borderRadius: 999, overflow: 'hidden', background: BORDER }}>
+                          <div style={{
+                            height: '100%', borderRadius: 999,
+                            background: 'linear-gradient(90deg, #58a6ff, #a78bfa)',
+                            width: `${Math.min(100, uploadPct * 100)}%`,
+                            transition: 'width 0.15s linear',
+                            boxShadow: '0 0 12px rgba(88,166,255,0.6)',
+                          }} />
+                        </div>
+                        <div style={{ marginTop: 10, fontFamily: MONO, fontSize: 11, color: MUTED }}>{Math.round(uploadPct * 100)}% uploaded</div>
+                      </div>
+                    )}
+
+                    {stage === 'done' && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                        <motion.div
+                          initial={reduce ? { opacity: 0, scale: 0.6 } : { opacity: 0, scale: 0.4 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          transition={{ type: 'spring', stiffness: 260, damping: 15 }}
+                          style={{
+                            width: 44, height: 44, borderRadius: 999, flexShrink: 0,
+                            background: `${GREEN}15`, border: `1px solid ${GREEN}45`, color: GREEN,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            boxShadow: '0 0 24px rgba(63,185,80,0.35)',
+                          }}
+                        >
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                        </motion.div>
+                        <div>
+                          <div style={{ color: TEXT, fontSize: 15, fontWeight: 800 }}>Import complete</div>
+                          <div style={{ color: SUBTEXT, fontSize: 12.5, fontFamily: MONO, marginTop: 3 }}>
+                            258 new · 12 already tracked
+                          </div>
+                        </div>
+                        <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
+                          <div style={{ color: GREEN, fontSize: 20, fontWeight: 800, fontFamily: MONO }}>259</div>
+                          <div style={{ color: MUTED, fontSize: 9, fontFamily: MONO, letterSpacing: '0.1em' }}>UNREVIEWED</div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          </FadeUp>
+        </div>
+      </div>
+
+      <style jsx>{`
+        .lc-dot {
+          animation: impdash 2.6s linear infinite;
+        }
+        @keyframes impdash {
+          0% { left: 4%; opacity: 0; }
+          14% { opacity: 1; }
+          72% { opacity: 1; }
+          100% { left: 96%; opacity: 0; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .lc-dot { display: none; }
+        }
+      `}</style>
+    </section>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // FOOTER
 // ---------------------------------------------------------------------------
 
@@ -1265,6 +1653,7 @@ export default function LandingClient() {
       <DashboardPreview />
       <HowItWorks />
       <Features />
+      <ImportPreview />
       <FinalCTA />
       <Footer />
     </div>
