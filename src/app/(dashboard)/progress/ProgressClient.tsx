@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { getRankInfo, getRankProgress } from '@/lib/rank'
+import { getRankInfo, getRankProgress, RANKS } from '@/lib/rank'
 
 const BG = '#0d1117'
 const CARD = '#161b22'
@@ -25,15 +25,7 @@ interface Props {
   dailyCommitment: number
 }
 
-const ALL_RANKS = [
-  { rank: 'Beginner', label: '?', min: 0, color: '#484f58', bg: 'rgba(72,79,88,0.15)', border: 'rgba(72,79,88,0.4)', glow: 'rgba(72,79,88,0.3)', desc: 'Just getting started' },
-  { rank: 'E-Class', label: 'E', min: 10, color: '#58a6ff', bg: 'rgba(88,166,255,0.15)', border: 'rgba(88,166,255,0.4)', glow: 'rgba(88,166,255,0.3)', desc: '10 problems tracked' },
-  { rank: 'D-Class', label: 'D', min: 30, color: '#a78bfa', bg: 'rgba(167,139,250,0.15)', border: 'rgba(167,139,250,0.4)', glow: 'rgba(167,139,250,0.3)', desc: '30 problems tracked' },
-  { rank: 'C-Class', label: 'C', min: 60, color: '#3fb950', bg: 'rgba(63,185,80,0.15)', border: 'rgba(63,185,80,0.4)', glow: 'rgba(63,185,80,0.3)', desc: '60 problems tracked' },
-  { rank: 'B-Class', label: 'B', min: 100, color: '#388bfd', bg: 'rgba(56,139,253,0.15)', border: 'rgba(56,139,253,0.4)', glow: 'rgba(56,139,253,0.3)', desc: '100 problems tracked' },
-  { rank: 'A-Class', label: 'A', min: 150, color: '#d29922', bg: 'rgba(210,153,34,0.15)', border: 'rgba(210,153,34,0.4)', glow: 'rgba(210,153,34,0.3)', desc: '150 problems tracked' },
-  { rank: 'S-Class', label: 'S', min: 210, color: '#f85149', bg: 'rgba(248,81,73,0.15)', border: 'rgba(248,81,73,0.4)', glow: 'rgba(248,81,73,0.3)', desc: '210 problems tracked' },
-]
+const ALL_RANKS = RANKS
 
 function AnimatedNumber({ value, duration = 1.4 }: { value: number; duration?: number }) {
   const [display, setDisplay] = useState(0)
