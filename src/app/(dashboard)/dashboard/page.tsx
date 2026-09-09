@@ -17,7 +17,7 @@ export default async function DashboardPage() {
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
   // Run all independent queries in parallel
-  const [settingsRes, todayRes, overdueRes, allRes, countRes, reviewRes, problemRes, unreviewedRes] = await Promise.all([
+  const [settingsRes, todayRes, overdueRes, allRes, countRes, reviewRes, problemRes, unreviewedRes, unreviewedCountRes] = await Promise.all([
     supabase.from("user_settings").select("daily_commitment, current_streak, longest_streak, last_activity_date, username").eq("user_id", user.id).single(),
     supabase.from("problems").select("*").eq("user_id", user.id).eq("next_review_date", today).order("next_review_date", { ascending: true }),
     supabase.from("problems").select("*", { count: "exact", head: true }).eq("user_id", user.id).lt("next_review_date", today),
@@ -27,7 +27,10 @@ export default async function DashboardPage() {
     supabase.from("problems").select("id, created_at, next_review_date, stability").eq("user_id", user.id),
     // Imported backlog — stability 0 until first review (next_review_date is a
     // far-future sentinel date). Not part of the daily queue, rank, or streak.
-    supabase.from("problems").select("id, title, difficulty, leetcode_slug, leetcode_url").eq("user_id", user.id).eq("stability", 0).order("created_at", { ascending: false }),
+    // Show just the latest 5; a reviewed one is naturally replaced server-side
+    // when the dashboard is re-rendered after a review.
+    supabase.from("problems").select("id, title, difficulty, leetcode_slug, leetcode_url").eq("user_id", user.id).eq("stability", 0).order("created_at", { ascending: false }).limit(5),
+    supabase.from("problems").select("*", { count: "exact", head: true }).eq("user_id", user.id).eq("stability", 0),
   ]);
 
   const settings = settingsRes.data;
@@ -38,6 +41,7 @@ export default async function DashboardPage() {
   const reviewRows = reviewRes.data;
   const problemRows = problemRes.data;
   const unreviewedProblems = unreviewedRes.data ?? [];
+  const unreviewedCount = unreviewedCountRes.count ?? 0;
 
   const seen = new Set();
   const uniqueProblems = (allProblems ?? [])
@@ -141,6 +145,7 @@ export default async function DashboardPage() {
       streakWindow={streakWindow}
       userName={userName}
       unreviewedProblems={unreviewedProblems}
+      unreviewedCount={unreviewedCount}
     />
   );
 }

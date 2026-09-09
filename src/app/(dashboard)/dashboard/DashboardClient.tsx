@@ -47,6 +47,7 @@ interface Props {
   streakWindow: string[]
   userName: string
   unreviewedProblems: UnreviewedProblem[]
+  unreviewedCount: number
 }
 
 const BG = '#0d1117'
@@ -408,14 +409,12 @@ function CodingStreakHeatmap({ activityData, currentStreak, longestStreak, strea
 
 export default function DashboardClient({
   shownProblems, queueCount, overdueCount, recentProblems, dailyCommitment, isBacklogged,
-  totalCount, streak, longestStreak, streakActive, activityData, streakWindow, userName, unreviewedProblems,
+  totalCount, streak, longestStreak, streakActive, activityData, streakWindow, userName, unreviewedProblems, unreviewedCount,
 }: Props) {
   const totalReviewed = recentProblems.reduce((a, p) => a + (p.review_count ?? 0), 0);
   const rankInfo = getRankInfo(totalCount);
   const completionPct = shownProblems.length === 0 ? 100 : Math.round((dailyCommitment - shownProblems.length) / dailyCommitment * 100);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [unreviewedShown, setUnreviewedShown] = useState(5);
-  const unreviewedVisible = unreviewedProblems.slice(0, unreviewedShown);
 
   // Check for stale streak on mount (user missed a day → reset to 0)
   useEffect(() => {
@@ -623,21 +622,17 @@ export default function DashboardClient({
                       <div style={{ fontSize: 17, fontWeight: 800, color: PURPLE }}>Unreviewed Problems</div>
                       <div style={{ color: SUBTEXT, fontSize: 12 }}>Imported from your history — solve any, no daily limit</div>
                     </div>
+                    <div style={{
+                      background: `${PURPLE}0a`, border: `1px solid ${PURPLE}25`,
+                      color: PURPLE, fontFamily: MONO, fontSize: 11, fontWeight: 700,
+                      padding: '5px 12px', borderRadius: 999, whiteSpace: 'nowrap',
+                    }}>
+                      {unreviewedCount} remaining
+                    </div>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {unreviewedVisible.map((p, i) => <UnreviewedQuestRow key={p.id} problem={p} index={i} />)}
+                    {unreviewedProblems.map((p, i) => <UnreviewedQuestRow key={p.id} problem={p} index={i} />)}
                   </div>
-                  {unreviewedProblems.length > unreviewedShown && (
-                    <button
-                      onClick={() => setUnreviewedShown(unreviewedShown + 5)}
-                      style={{
-                        marginTop: 10, width: '100%', background: `${PURPLE}0a`, border: `1px solid ${PURPLE}25`,
-                        color: PURPLE, padding: '8px 0', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                      }}
-                    >
-                      Show more ({Math.min(5, unreviewedProblems.length - unreviewedShown)} more)
-                    </button>
-                  )}
                 </div>
               )}
 
