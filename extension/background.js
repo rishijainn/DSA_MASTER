@@ -181,17 +181,30 @@ async function fetchDifficulties(slugs, headers, onProgress) {
   return difficultyBySlug
 }
 
-let syncLock = false
+// Sync runs once in the background and broadcasts progress to every connected
+// page. If a page reloads or a second tab opens mid-sync, it joins the running
+// run instead of failing with "already running".
+const bridgePorts = new Set()
+let syncRunning = false
+let syncRunId = null
+let syncSnapshot = null
 
-async function runSyncOnPort(port, reqId) {
-  if (syncLock) {
-    try { port.postMessage({ __reqId: reqId, type: 'sync-error', error: 'SYNC_ALREADY_RUNNING' }) } catch {}
-    return
+function bridgeBroadcast(msg) {
+  if (!msg) return
+  syncSnapshot = msg
+  for (const port of bridgePorts) {
+    try {
+      port.postMessage({ syncId: syncRunId, ...msg })
+    } catch {
+      bridgePorts.delete(port)
+    }
   }
-  syncLock = true
-  const post = (msg) => {
-    try { port.postMessage({ __reqId: reqId, ...msg }) } catch {}
-  }
+}
+
+async function runSync() {
+  if (syncRunning) return
+  syncRunning = true
+  const post = (msg) => bridgeBroadcast(msg)
 
   try {
     const { token } = await chrome.storage.local.get('token')
@@ -246,7 +259,10 @@ async function runSyncOnPort(port, reqId) {
   } catch (e) {
     post({ type: 'sync-error', error: e instanceof Error ? e.message : String(e) })
   } finally {
-    syncLock = false
+    syncRunning = false
+    syncRunId = null
+    syncSnapshot = null
+    bridgePorts.clear()
   }
 }
 
@@ -269,6 +285,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // Long-lived bridge port from our website (content-bridge.js relays it)
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== 'dsa-master-bridge') return
+  bridgePorts.add(port)
 
   port.onMessage.addListener((msg) => {
     if (!msg) return
@@ -281,9 +298,27 @@ chrome.runtime.onConnect.addListener((port) => {
     }
 
     if (msg.type === 'start-sync') {
-      runSyncOnPort(port, msg.__reqId || null)
+      if (syncRunning) {
+        // Page reloaded mid-sync — join the running run and replay its state.
+        try {
+          port.postMessage({
+            type: 'sync-started',
+            syncId: syncRunId,
+            stage: syncSnapshot ? syncSnapshot.stage || 'scrape' : 'scrape',
+            data: syncSnapshot || null,
+          })
+        } catch {}
+        return
+      }
+      syncRunId = 'sync-' + Date.now()
+      try {
+        port.postMessage({ type: 'sync-started', syncId: syncRunId, stage: 'scrape', data: null })
+      } catch {}
+      runSync()
     }
   })
 
-  port.onDisconnect.addListener(() => {})
+  port.onDisconnect.addListener(() => {
+    bridgePorts.delete(port)
+  })
 })

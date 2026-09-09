@@ -11,7 +11,10 @@ export default function TabRefresh() {
         wasHidden.current = true
       } else if (wasHidden.current) {
         wasHidden.current = false
-        window.location.reload()
+        const syncRunning = typeof window !== 'undefined'
+          ? (window as unknown as { __dsaSyncRunning?: number }).__dsaSyncRunning
+          : undefined
+        if (!syncRunning) window.location.reload()
       }
     }
 

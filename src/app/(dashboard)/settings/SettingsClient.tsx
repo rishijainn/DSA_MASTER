@@ -93,31 +93,57 @@ export default function SettingsClient({
   }>({})
   const [syncResult, setSyncResult] = useState<{ inserted: number; duplicates: number; total: number; imported_more: boolean } | null>(null)
   const [syncError, setSyncError] = useState<string | null>(null)
-  const reqIdRef = useRef<number>(0)
+  const syncIdRef = useRef<string | null>(null)
 
   const rankInfo = getRankInfo(totalCount)
 
   function mapSyncError(code: string) {
     const map: Record<string, string> = {
       NO_TOKEN: 'No token stored in the extension. Open the popup, paste your token, and connect first.',
-      NO_LEETCODE_SESSION: 'You need to be logged into LeetCode. Open a LeetCode tab, sign in, then try again.',
+      NO_LEETCODE_SESSION: 'You are not logged into LeetCode. Log in below, then try again.',
       NO_ACCEPTED: 'No accepted submissions found for that LeetCode account.',
-      SYNC_ALREADY_RUNNING: 'A sync is already in progress. Wait for it to finish.',
     }
     return map[code] || code
   }
 
   function handleBridgePayload(payload: Record<string, unknown>) {
     if (!payload || typeof payload !== 'object') return
-    if (payload.type === 'bridge-status') {
+    const type = payload.type
+    const syncId = payload.syncId ? String(payload.syncId) : null
+
+    if (type === 'bridge-status') {
       setExtAvailable(payload.available ? 'yes' : 'no')
+      return
     }
-    if (payload.type === 'pong') {
+    if (type === 'pong') {
       setExtAvailable('yes')
       setExtVersion(String(payload.version ?? '') || null)
+      return
     }
-    if (payload.__reqId !== reqIdRef.current) return
-    if (payload.type === 'sync-progress') {
+    if (!syncId) return
+
+    // A started/reloaded page joins the actively-running sync instead of conflicting.
+    if (type === 'sync-started') {
+      syncIdRef.current = syncId
+      setSyncing(true)
+      setSyncResult(null)
+      setSyncError(null)
+      const data = (payload.data as Record<string, unknown>) || {}
+      setStage((data.stage as 'scrape' | 'difficulty' | 'upload') || 'scrape')
+      setStageData({
+        page: data.page as number | undefined,
+        fetched: data.fetched as number | undefined,
+        unique: data.unique as number | undefined,
+        done: data.done as number | undefined,
+        total: data.total as number | undefined,
+        count: data.count as number | undefined,
+      })
+      return
+    }
+
+    if (!syncIdRef.current || syncId !== syncIdRef.current) return
+
+    if (type === 'sync-progress') {
       setStage(payload.stage as 'scrape' | 'difficulty' | 'upload')
       setStageData({
         page: payload.page as number | undefined,
@@ -127,15 +153,19 @@ export default function SettingsClient({
         total: payload.total as number | undefined,
         count: payload.count as number | undefined,
       })
+      return
     }
-    if (payload.type === 'sync-result') {
+    if (type === 'sync-result') {
       setSyncResult({ inserted: Number(payload.inserted) || 0, duplicates: Number(payload.duplicates) || 0, total: Number(payload.total) || 0, imported_more: Boolean(payload.imported_more) })
       setStage('done')
       setSyncing(false)
+      syncIdRef.current = null
+      return
     }
-    if (payload.type === 'sync-error') {
-      setSyncError(mapSyncError(String(payload.error ?? 'Unknown error')))
+    if (type === 'sync-error') {
+      setSyncError(String(payload.error ?? 'sync_error'))
       setSyncing(false)
+      syncIdRef.current = null
     }
   }
 
@@ -150,8 +180,7 @@ export default function SettingsClient({
     setSyncError(null)
     setStage(null)
     setStageData({})
-    reqIdRef.current = Date.now() + Math.floor(Math.random() * 100000)
-    postToExtension({ type: 'start-sync', __reqId: reqIdRef.current })
+    postToExtension({ type: 'start-sync' })
   }
 
   useEffect(() => {
@@ -171,6 +200,11 @@ export default function SettingsClient({
       clearTimeout(failTimer)
     }
   }, [])
+
+  // Tell TabRefresh (dashboard layout) to skip its auto-reload while syncing.
+  useEffect(() => {
+    ;(window as unknown as { __dsaSyncRunning?: number }).__dsaSyncRunning = syncing ? 1 : 0
+  }, [syncing])
 
   useEffect(() => {
     if (editing) {
@@ -643,7 +677,7 @@ export default function SettingsClient({
                 }}>
                   Review them on the Dashboard →
                 </a>
-                <button onClick={startSync} style={{
+                <button onClick={startSync} type="button" style={{
                   padding: '12px 20px', borderRadius: 10, cursor: 'pointer',
                   background: 'transparent', border: `1px solid ${BORDER}`, color: BLUE,
                   fontSize: 13, fontWeight: 600,
@@ -665,16 +699,32 @@ export default function SettingsClient({
                 </div>
                 <div>
                   <div style={{ color: TEXT, fontSize: 14, fontWeight: 700 }}>Import failed</div>
-                  <div style={{ color: SUBTEXT, fontSize: 12, marginTop: 2, lineHeight: 1.5 }}>{syncError}</div>
+                  <div style={{ color: SUBTEXT, fontSize: 12, marginTop: 2, lineHeight: 1.5 }}>{mapSyncError(syncError)}</div>
                 </div>
               </div>
-              <button onClick={startSync} style={{
-                padding: '11px 22px', borderRadius: 10, cursor: 'pointer',
-                background: BLUE, color: '#0d1117', border: 'none',
-                fontSize: 13, fontWeight: 700,
-              }}>
-                Try again
-              </button>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <button onClick={startSync} type="button" style={{
+                  padding: '11px 22px', borderRadius: 10, cursor: 'pointer',
+                  background: BLUE, color: '#0d1117', border: 'none',
+                  fontSize: 13, fontWeight: 700,
+                }}>
+                  Try again
+                </button>
+                {syncError === 'NO_LEETCODE_SESSION' && (
+                  <a
+                    href="https://leetcode.com/accounts/login/"
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      padding: '11px 22px', borderRadius: 10, cursor: 'pointer',
+                      background: 'transparent', border: `1px solid ${BORDER}`, color: BLUE,
+                      fontSize: 13, fontWeight: 600, textDecoration: 'none',
+                    }}
+                  >
+                    Log into LeetCode ↗
+                  </a>
+                )}
+              </div>
             </div>
           ) : (
             // ── Idle ──
@@ -690,6 +740,7 @@ export default function SettingsClient({
                 </div>
               )}
               <button
+                type="button"
                 onClick={startSync}
                 disabled={extAvailable === 'no'}
                 onMouseEnter={e => { if (extAvailable !== 'no') e.currentTarget.style.background = BLUE }}
