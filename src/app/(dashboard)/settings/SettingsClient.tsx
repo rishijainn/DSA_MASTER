@@ -82,7 +82,95 @@ export default function SettingsClient({
   const [nameError, setNameError] = useState<string | null>(null)
   const nameRef = useRef<HTMLInputElement>(null)
 
+  // ── LeetCode sync (extension bridge) ──
+  const [extAvailable, setExtAvailable] = useState<'unknown' | 'yes' | 'no'>('unknown')
+  const [extVersion, setExtVersion] = useState<string | null>(null)
+  const [syncing, setSyncing] = useState(false)
+  const [stage, setStage] = useState<null | 'scrape' | 'difficulty' | 'upload' | 'done'>(null)
+  const [stageData, setStageData] = useState<{
+    page?: number; fetched?: number; unique?: number
+    done?: number; total?: number; count?: number
+  }>({})
+  const [syncResult, setSyncResult] = useState<{ inserted: number; duplicates: number; total: number; imported_more: boolean } | null>(null)
+  const [syncError, setSyncError] = useState<string | null>(null)
+  const reqIdRef = useRef<number>(0)
+
   const rankInfo = getRankInfo(totalCount)
+
+  function mapSyncError(code: string) {
+    const map: Record<string, string> = {
+      NO_TOKEN: 'No token stored in the extension. Open the popup, paste your token, and connect first.',
+      NO_LEETCODE_SESSION: 'You need to be logged into LeetCode. Open a LeetCode tab, sign in, then try again.',
+      NO_ACCEPTED: 'No accepted submissions found for that LeetCode account.',
+      SYNC_ALREADY_RUNNING: 'A sync is already in progress. Wait for it to finish.',
+    }
+    return map[code] || code
+  }
+
+  function handleBridgePayload(payload: Record<string, unknown>) {
+    if (!payload || typeof payload !== 'object') return
+    if (payload.type === 'bridge-status') {
+      setExtAvailable(payload.available ? 'yes' : 'no')
+    }
+    if (payload.type === 'pong') {
+      setExtAvailable('yes')
+      setExtVersion(String(payload.version ?? '') || null)
+    }
+    if (payload.__reqId !== reqIdRef.current) return
+    if (payload.type === 'sync-progress') {
+      setStage(payload.stage as 'scrape' | 'difficulty' | 'upload')
+      setStageData({
+        page: payload.page as number | undefined,
+        fetched: payload.fetched as number | undefined,
+        unique: payload.unique as number | undefined,
+        done: payload.done as number | undefined,
+        total: payload.total as number | undefined,
+        count: payload.count as number | undefined,
+      })
+    }
+    if (payload.type === 'sync-result') {
+      setSyncResult({ inserted: Number(payload.inserted) || 0, duplicates: Number(payload.duplicates) || 0, total: Number(payload.total) || 0, imported_more: Boolean(payload.imported_more) })
+      setStage('done')
+      setSyncing(false)
+    }
+    if (payload.type === 'sync-error') {
+      setSyncError(mapSyncError(String(payload.error ?? 'Unknown error')))
+      setSyncing(false)
+    }
+  }
+
+  function postToExtension(payload: Record<string, unknown>) {
+    window.postMessage({ target: 'dsa-master-extension', payload }, '*')
+  }
+
+  function startSync() {
+    if (syncing) return
+    setSyncing(true)
+    setSyncResult(null)
+    setSyncError(null)
+    setStage(null)
+    setStageData({})
+    reqIdRef.current = Date.now() + Math.floor(Math.random() * 100000)
+    postToExtension({ type: 'start-sync', __reqId: reqIdRef.current })
+  }
+
+  useEffect(() => {
+    function onMessage(e: MessageEvent) {
+      if (e.source !== window) return
+      const data = e.data
+      if (!data || data.target !== 'dsa-master-site') return
+      handleBridgePayload(data.payload)
+    }
+    window.addEventListener('message', onMessage)
+    postToExtension({ type: 'ping', __reqId: 0 })
+    const failTimer = setTimeout(() => {
+      setExtAvailable((prev) => (prev === 'yes' ? prev : 'no'))
+    }, 2500)
+    return () => {
+      window.removeEventListener('message', onMessage)
+      clearTimeout(failTimer)
+    }
+  }, [])
 
   useEffect(() => {
     if (editing) {
@@ -143,6 +231,7 @@ export default function SettingsClient({
       <style jsx>{`
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
         @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes shimmer { 0% { background-position: -240px 0; } 100% { background-position: 240px 0; } }
       `}</style>
 
       <div style={{ maxWidth: '760px', margin: '0 auto', padding: '48px 24px 24px' }}>
@@ -403,18 +492,233 @@ export default function SettingsClient({
             }
           />
 
-          <p style={{ color: SUBTEXT, fontSize: 13, margin: '0 0 14px', lineHeight: 1.6 }}>
-            One-time setup imports every problem you&apos;ve ever solved on LeetCode as a
+          <p style={{ color: SUBTEXT, fontSize: 13, margin: '0 0 16px', lineHeight: 1.6 }}>
+            One-time setup imports every problem you&apos;ve ever solved on LeetCode as an
             <strong style={{ color: TEXT }}> unreviewed backlog</strong>. Imported problems don&apos;t count toward
             your rank or streak until you review them.
           </p>
 
-          <ol style={{ margin: 0, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 8, color: '#b0b8c1', fontSize: 13.5, lineHeight: 1.6 }}>
-            <li>Make sure your extension is connected (token above).</li>
-            <li>Log into LeetCode and open any <strong style={{ color: TEXT }}>/problems/</strong> page.</li>
-            <li>Click the <strong style={{ color: BLUE }}>⟳ Sync to DSA Master</strong> pill (bottom-left). It walks your full submission history.</li>
-            <li>Start reviewing imported problems from Problem History — hard ones surface automatically later.</li>
-          </ol>
+          {syncing ? (
+            // ── Animated progression: Scanning → Difficulty → Uploading ──
+            <div style={{ background: CARD_INNER, border: `1px solid ${BORDER}`, borderRadius: 12, padding: '22px 20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
+                {[
+                  { key: 'scrape', label: 'Scanning' },
+                  { key: 'difficulty', label: 'Difficulty' },
+                  { key: 'upload', label: 'Uploading' },
+                  { key: 'done', label: 'Done' },
+                ].map((s, i) => {
+                  const activeIdx = stage === 'done' ? 3 : stage === 'upload' ? 2 : stage === 'difficulty' ? 1 : 0
+                  const finished = i < activeIdx
+                  const active = i === activeIdx
+                  return (
+                    <div key={s.key} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{
+                        display: 'flex', alignItems: 'center', gap: 6,
+                        padding: '5px 10px', borderRadius: 999,
+                        background: finished ? `${GREEN}12` : active ? `${BLUE}14` : 'transparent',
+                        border: `1px solid ${finished ? `${GREEN}30` : active ? `${BLUE}40` : BORDER}`,
+                        color: finished ? GREEN : active ? BLUE : MUTED,
+                      }}>
+                        <span style={{ fontSize: 10, fontWeight: 800, fontFamily: MONO }}>
+                          {finished ? '✓' : i + 1}
+                        </span>
+                        <span style={{ fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>{s.label}</span>
+                      </div>
+                      {i < 3 && <span style={{ color: BORDER, fontSize: 10 }}>→</span>}
+                    </div>
+                  )
+                })}
+              </div>
+
+              {stage === 'scrape' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                  <div style={{
+                    width: 44, height: 44, borderRadius: 999, flexShrink: 0,
+                    border: '3px solid rgba(88,166,255,0.15)', borderTopColor: BLUE,
+                    animation: 'spin 0.9s linear infinite',
+                  }} />
+                  <div>
+                    <div style={{ color: TEXT, fontSize: 13, fontWeight: 600, marginBottom: 3 }}>
+                      Fetching page <span style={{ color: BLUE, fontFamily: MONO }}>{stageData.page || '…'}</span>
+                    </div>
+                    <div style={{ color: SUBTEXT, fontSize: 12, fontFamily: MONO }}>
+                      {stageData.fetched ?? 0} submissions scanned · {stageData.unique ?? 0} unique accepted
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {stage === 'difficulty' && (() => {
+                const c = 2 * Math.PI * 20
+                const pct = stageData.total ? Math.min(1, (stageData.done || 0) / stageData.total) : 0
+                return (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                    <div style={{ position: 'relative', width: 52, height: 52, flexShrink: 0 }}>
+                      <svg width="52" height="52" viewBox="0 0 52 52">
+                        <circle cx="26" cy="26" r="20" fill="none" stroke={BORDER} strokeWidth="4" />
+                        <circle cx="26" cy="26" r="20" fill="none" stroke={BLUE} strokeWidth="4" strokeLinecap="round"
+                          strokeDasharray={c} strokeDashoffset={c * (1 - pct)} transform="rotate(-90 26 26)"
+                          style={{ transition: 'stroke-dashoffset 0.3s ease' }} />
+                      </svg>
+                      <span style={{
+                        position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: BLUE, fontSize: 11, fontWeight: 800, fontFamily: MONO,
+                      }}>{Math.round(pct * 100)}%</span>
+                    </div>
+                    <div>
+                      <div style={{ color: TEXT, fontSize: 13, fontWeight: 600, marginBottom: 3 }}>Calculating difficulty</div>
+                      <div style={{ color: SUBTEXT, fontSize: 12, fontFamily: MONO }}>
+                        {stageData.done || 0} / {stageData.total || 0} problems
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {stage === 'upload' && (
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+                    <span style={{ color: TEXT, fontSize: 13, fontWeight: 600 }}>Uploading to DSA Master</span>
+                    <span style={{ color: BLUE, fontSize: 11, fontFamily: MONO, fontWeight: 700 }}>{stageData.count || 0} problems</span>
+                  </div>
+                  <div style={{
+                    height: 8, borderRadius: 999, overflow: 'hidden', background: BORDER,
+                    backgroundImage: 'linear-gradient(90deg, rgba(88,166,255,0) 0%, rgba(88,166,255,0.85) 50%, rgba(88,166,255,0) 100%)',
+                    backgroundSize: '240px 100%', backgroundRepeat: 'no-repeat',
+                    animation: 'shimmer 1.2s infinite linear',
+                  }} />
+                </div>
+              )}
+
+              {stage === 'done' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{
+                    width: 36, height: 36, borderRadius: 999, flexShrink: 0,
+                    background: `${GREEN}14`, border: `1px solid ${GREEN}40`,
+                    color: GREEN, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                  </div>
+                  <div>
+                    <div style={{ color: TEXT, fontSize: 13, fontWeight: 600, marginBottom: 3 }}>{syncResult ? `${syncResult.inserted} problems imported` : 'Import complete'}</div>
+                    <div style={{ color: SUBTEXT, fontSize: 12, fontFamily: MONO }}>{syncResult ? `${syncResult.duplicates} already tracked` : ''}</div>
+                  </div>
+                </div>
+              )}
+
+              <div style={{ color: MUTED, fontSize: 11.5, marginTop: 16, fontFamily: MONO }}>
+                Keep this tab open — one or two minutes for a full backlog.
+              </div>
+            </div>
+          ) : stage === 'done' && syncResult ? (
+            // ── Success ──
+            <div style={{ background: CARD_INNER, border: `1px solid ${GREEN}28`, borderRadius: 12, padding: '20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                <div style={{
+                  width: 44, height: 44, borderRadius: 999, flexShrink: 0,
+                  background: `${GREEN}14`, border: `1px solid ${GREEN}40`,
+                  color: GREEN, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                </div>
+                <div>
+                  <div style={{ color: TEXT, fontSize: 15, fontWeight: 700 }}>Import complete</div>
+                  <div style={{ color: SUBTEXT, fontSize: 12, marginTop: 2 }}>
+                    <strong style={{ color: GREEN, fontFamily: MONO }}>{syncResult.inserted}</strong> new problems added to your backlog
+                    {syncResult.duplicates > 0 && <> · <strong style={{ color: SUBTEXT, fontFamily: MONO }}>{syncResult.duplicates}</strong> already tracked</>}
+                  </div>
+                </div>
+              </div>
+              {syncResult.imported_more && (
+                <div style={{ color: GOLD, fontSize: 12, marginBottom: 14, fontFamily: MONO }}>
+                  ⚠ This run capped at 500 — run Import again when you&apos;re ready for the rest.
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 10 }}>
+                <a href="/dashboard" style={{
+                  flex: 1, textAlign: 'center', padding: '12px 0', borderRadius: 10,
+                  background: BLUE, color: '#0d1117', fontSize: 13, fontWeight: 700,
+                  textDecoration: 'none', cursor: 'pointer',
+                }}>
+                  Review them on the Dashboard →
+                </a>
+                <button onClick={startSync} style={{
+                  padding: '12px 20px', borderRadius: 10, cursor: 'pointer',
+                  background: 'transparent', border: `1px solid ${BORDER}`, color: BLUE,
+                  fontSize: 13, fontWeight: 600,
+                }}>
+                  Import again
+                </button>
+              </div>
+            </div>
+          ) : syncError ? (
+            // ── Error ──
+            <div style={{ background: CARD_INNER, border: `1px solid ${RED}30`, borderRadius: 12, padding: '20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                <div style={{
+                  width: 44, height: 44, borderRadius: 999, flexShrink: 0,
+                  background: `${RED}12`, border: `1px solid ${RED}40`,
+                  color: RED, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+                </div>
+                <div>
+                  <div style={{ color: TEXT, fontSize: 14, fontWeight: 700 }}>Import failed</div>
+                  <div style={{ color: SUBTEXT, fontSize: 12, marginTop: 2, lineHeight: 1.5 }}>{syncError}</div>
+                </div>
+              </div>
+              <button onClick={startSync} style={{
+                padding: '11px 22px', borderRadius: 10, cursor: 'pointer',
+                background: BLUE, color: '#0d1117', border: 'none',
+                fontSize: 13, fontWeight: 700,
+              }}>
+                Try again
+              </button>
+            </div>
+          ) : (
+            // ── Idle ──
+            <div>
+              {extAvailable === 'no' && (
+                <div style={{
+                  background: `${GOLD}0d`, border: `1px solid ${GOLD}30`, borderRadius: 10,
+                  padding: '12px 14px', marginBottom: 14,
+                  color: '#d8c28a', fontSize: 12.5, lineHeight: 1.5,
+                }}>
+                  <strong style={{ color: GOLD }}>Extension not detected.</strong> Make sure it&apos;s loaded at{' '}
+                  <code style={{ fontFamily: MONO }}>chrome://extensions</code> (reload it if you just updated), then refresh this page.
+                </div>
+              )}
+              <button
+                onClick={startSync}
+                disabled={extAvailable === 'no'}
+                onMouseEnter={e => { if (extAvailable !== 'no') e.currentTarget.style.background = BLUE }}
+                onMouseLeave={e => { if (extAvailable !== 'no') e.currentTarget.style.background = 'transparent' }}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  width: '100%', padding: '15px 0', borderRadius: 11,
+                  background: extAvailable === 'no' ? 'transparent' : `${BLUE}12`,
+                  border: `1.5px solid ${extAvailable === 'no' ? BORDER : BLUE}`,
+                  color: extAvailable === 'no' ? MUTED : BLUE,
+                  fontSize: 14, fontWeight: 700, cursor: extAvailable === 'no' ? 'not-allowed' : 'pointer',
+                  transition: 'background 0.15s',
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2v6h-6" /><path d="M3 12a9 9 0 0 1 15-6.7L21 8" /><path d="M3 22v-6h6" /><path d="M21 12a9 9 0 0 1-15 6.7L3 16" /></svg>
+                Sync LeetCode history
+              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
+                <span style={{ color: MUTED, fontSize: 11.5, fontFamily: MONO }}>Status:</span>
+                {extAvailable === 'unknown' && <span style={{ color: SUBTEXT, fontSize: 11.5, fontFamily: MONO }}>checking for extension…</span>}
+                {extAvailable === 'yes' && <span style={{ color: GREEN, fontSize: 11.5, fontFamily: MONO }}>extension connected{extVersion ? ` · v${extVersion}` : ''} — you&apos;re set</span>}
+                {extAvailable === 'no' && <span style={{ color: RED, fontSize: 11.5, fontFamily: MONO }}>connection unavailable</span>}
+              </div>
+              <p style={{ color: MUTED, fontSize: 11.5, margin: '12px 0 0', lineHeight: 1.6 }}>
+                Runs from inside the extension right here — your LeetCode cookie never leaves your browser.
+                Just be logged into LeetCode in any tab. Imported problems land in Problem History as unreviewed.
+              </p>
+            </div>
+          )}
         </Card>
 
         {/* ═══════════════════════════════════════════
@@ -486,10 +790,10 @@ export default function SettingsClient({
           </span>
           <span style={{ color: BORDER, margin: '0 2px' }}>·</span>
           <span style={{ color: MUTED, fontSize: 12, fontFamily: MONO }}>
-            Extension: {extensionConnected ? 'Connected' : 'Not connected'}
+            {syncing ? 'Sync: in progress' : extVersion ? `Sync: v${extVersion}` : 'Sync: idle'}
           </span>
           <span style={{ color: BORDER, margin: '0 2px' }}>·</span>
-          <span style={{ color: MUTED, fontSize: 12, fontFamily: MONO }}>v1.0.0</span>
+          <span style={{ color: MUTED, fontSize: 12, fontFamily: MONO }}>v1.0.3</span>
         </div>
 
       </div>

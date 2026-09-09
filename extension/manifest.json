@@ -1,17 +1,18 @@
 {
   "manifest_version": 3,
   "name": "DSA Master",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Track your LeetCode and GFG submissions with spaced repetition",
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; connect-src https://dsa-master-bice.vercel.app"
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src https://dsa-master-bice.vercel.app https://leetcode.com"
   },
   "background": {
     "service_worker": "background.js"
   },
   "permissions": [
     "storage",
-    "activeTab"
+    "activeTab",
+    "cookies"
   ],
   "host_permissions": [
     "https://dsa-master-bice.vercel.app/*",
@@ -28,21 +29,21 @@
     },
     {
       "matches": [
-        "https://leetcode.com/problems/*"
-      ],
-      "js": [
-        "leetcode-importer.js"
-      ],
-      "run_at": "document_idle"
-    },
-    {
-      "matches": [
         "https://www.geeksforgeeks.org/problems/*",
         "https://practice.geeksforgeeks.org/*"
       ],
       "js": [
         "content-gfg.js"
       ]
+    },
+    {
+      "matches": [
+        "https://dsa-master-bice.vercel.app/*"
+      ],
+      "js": [
+        "content-bridge.js"
+      ],
+      "run_at": "document_idle"
     }
   ],
   "action": {
