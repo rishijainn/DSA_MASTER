@@ -773,6 +773,39 @@ export default function SettingsClient({
         </Card>
 
         {/* ═══════════════════════════════════════════
+            GFG HISTORY IMPORT (coming soon)
+           ═══════════════════════════════════════════ */}
+        <Card elevated accent={GREEN}>
+          <div style={{
+            position: 'absolute', top: 28, right: 28,
+            padding: '4px 12px', borderRadius: 999,
+            background: `${GREEN}14`, border: `1px solid ${GREEN}40`,
+            color: GREEN, fontSize: 10, fontWeight: 800, fontFamily: MONO, letterSpacing: '0.08em',
+          }}>
+            COMING SOON
+          </div>
+
+          <SectionHeader
+            color={GREEN}
+            title="Import your GFG history"
+            sub="GeeksforGeeks solved backlog"
+            icon={
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" /></svg>
+            }
+          />
+
+          <p style={{ color: SUBTEXT, fontSize: 13, margin: '0 0 12px', lineHeight: 1.6 }}>
+            Bulk-importing your GeeksforGeeks solve history is on the way. When it lands,
+            GFG problems will be matched against your existing LeetCode problems by title —
+            so the same problem never shows up twice.
+          </p>
+          <p style={{ color: MUTED, fontSize: 12.5, margin: 0, lineHeight: 1.6 }}>
+            Until then, solving GFG problems with the extension connected logs them live and
+            links them to the same problem on LeetCode if you&apos;ve already tracked it there.
+          </p>
+        </Card>
+
+        {/* ═══════════════════════════════════════════
             QUICK TIPS
            ═══════════════════════════════════════════ */}
         <Card>
