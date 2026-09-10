@@ -312,6 +312,7 @@ function createPopup(slug) {
     document.getElementById("dsa-save").textContent = "Saving...";
 
     const payload = {
+      source: "leetcode",
       slug: slug,
       url: window.location.href,
       title: titleFromSlug(slug),

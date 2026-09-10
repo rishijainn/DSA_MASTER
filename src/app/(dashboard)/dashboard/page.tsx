@@ -47,8 +47,8 @@ export default async function DashboardPage() {
   const uniqueProblems = (allProblems ?? [])
     .filter((p) => {
       if (p.stability === 0) return false; // unreviewed imports — not "recent reviews"
-      if (seen.has(p.leetcode_slug)) return false;
-      seen.add(p.leetcode_slug);
+      if (seen.has(p.id)) return false;
+      seen.add(p.id);
       return true;
     })
     .slice(0, 5);
