@@ -14,7 +14,7 @@ import {
   animate,
 } from 'framer-motion'
 
-const CHROME_STORE_URL = '#'
+const CHROME_STORE_URL = 'https://chromewebstore.google.com/detail/dsa-master/gachhhhhpodhailoegmookepbgfljaod'
 
 const BG = '#0d1117'
 const CARD = '#161b22'

@@ -1,9 +1,14 @@
-const API_URL = 'https://dsa-master-bice.vercel.app'
+// constants.js is loaded before this script via popup.html
+const API_URL = SITE_BASE
+
+/* ── footer links (set once, always visible) ────────────────────────────── */
+document.getElementById('linkWebsite').href = SITE_DASH
+document.getElementById('linkHowTo').href   = SITE_HOWTO
 
 function updateFooter(connected) {
-  const dot = document.getElementById('footerDot')
+  const dot  = document.getElementById('footerDot')
   const text = document.getElementById('footerText')
-  dot.className = 'footer-dot ' + (connected ? 'green' : 'red')
+  dot.className  = 'footer-dot ' + (connected ? 'green' : 'red')
   text.textContent = connected ? 'Connected' : 'Not connected'
 }
 
@@ -22,6 +27,16 @@ async function render() {
         </div>
         <div class="status-label">Connected</div>
         <div class="status-sub">Extension is active</div>
+
+        <!-- Open Dashboard button -->
+        <a id="openDash" href="${SITE_DASH}" target="_blank" class="btn-dashboard">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+            <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+          </svg>
+          Open Dashboard
+        </a>
+
         <button class="btn-disconnect" id="logout">Disconnect</button>
       </div>
     `
@@ -83,6 +98,14 @@ async function render() {
         const msg = document.getElementById('msg')
         msg.className = 'msg success'
         msg.textContent = 'Connected!'
+
+        // Reload any open DSA Master tabs so the site sees the new session
+        // immediately. host_permissions already covers this URL — no extra
+        // "tabs" permission is required.
+        chrome.tabs.query({ url: `${SITE_BASE}/*` }, (tabs) => {
+          tabs.forEach(tab => chrome.tabs.reload(tab.id))
+        })
+
         setTimeout(render, 800)
       } else {
         const msg = document.getElementById('msg')

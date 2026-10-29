@@ -14,7 +14,8 @@
     "extension_pages": "script-src 'self'; object-src 'self'; connect-src https://dsa-master-bice.vercel.app https://leetcode.com"
   },
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "scripts": ["constants.js", "background.js"]
   },
   "permissions": [
     "storage",

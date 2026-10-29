@@ -1,4 +1,13 @@
-const API_URL = 'https://dsa-master-bice.vercel.app'
+importScripts('constants.js')
+
+const API_URL = SITE_BASE
+
+// ── Open website once on first install ────────────────────────────────────
+chrome.runtime.onInstalled.addListener((details) => {
+  if (details.reason === 'install') {
+    chrome.tabs.create({ url: SITE_WELCOME })
+  }
+})
 const LC_ENDPOINT = 'https://leetcode.com/graphql'
 const MAX_PAGES = 120 // covers ~2,400 rows (LeetCode returns ~20/page)
 const PAGE_SIZE = 50

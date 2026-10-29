@@ -95,6 +95,38 @@
     .footer-dot.green { background: #3fb950; box-shadow: 0 0 6px rgba(63,185,80,0.5); }
     .footer-dot.red { background: #f85149; }
     .footer span { font-size: 10px; color: #484f58; font-family: monospace; }
+
+    /* ── Open Dashboard button ── */
+    .btn-dashboard {
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+      width: 100%; margin-top: 12px; padding: 10px;
+      background: linear-gradient(135deg, #388bfd22, #a78bfa22);
+      border: 1px solid #388bfd55;
+      border-radius: 8px; color: #58a6ff;
+      font-size: 12px; font-weight: 600; cursor: pointer;
+      transition: all 0.15s; text-decoration: none;
+      letter-spacing: 0.2px;
+    }
+    .btn-dashboard:hover {
+      background: linear-gradient(135deg, #388bfd33, #a78bfa33);
+      border-color: #388bfd99;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 14px rgba(56,139,253,0.2);
+    }
+    .btn-dashboard svg { width: 13px; height: 13px; flex-shrink: 0; }
+
+    /* ── Footer links ── */
+    .footer-links {
+      padding: 10px 20px 12px;
+      border-top: 1px solid #21262d;
+      display: flex; align-items: center; justify-content: center; gap: 14px;
+    }
+    .footer-links a {
+      font-size: 10px; color: #484f58; font-family: monospace;
+      text-decoration: none; transition: color 0.15s;
+    }
+    .footer-links a:hover { color: #58a6ff; }
+    .footer-sep { font-size: 10px; color: #30363d; font-family: monospace; }
   </style>
 </head>
 <body>
@@ -112,6 +144,12 @@
     <div class="footer-dot" id="footerDot"></div>
     <span id="footerText">v1.0.0</span>
   </div>
+  <div class="footer-links">
+    <a id="linkWebsite" href="#" target="_blank">dsa-master.app</a>
+    <span class="footer-sep">·</span>
+    <a id="linkHowTo" href="#" target="_blank">how it works</a>
+  </div>
+  <script src="constants.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>
