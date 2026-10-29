@@ -3,11 +3,14 @@ importScripts('constants.js')
 const API_URL = SITE_BASE
 
 // ── Open website once on first install ────────────────────────────────────
+// Uses chrome.tabs.create which works without the "tabs" permission when
+// called from onInstalled (a trusted event in MV3).
 chrome.runtime.onInstalled.addListener((details) => {
-  if (details.reason === 'install') {
+  if (details.reason === chrome.runtime.OnInstalledReason.INSTALL) {
     chrome.tabs.create({ url: SITE_WELCOME })
   }
 })
+
 const LC_ENDPOINT = 'https://leetcode.com/graphql'
 const MAX_PAGES = 120 // covers ~2,400 rows (LeetCode returns ~20/page)
 const PAGE_SIZE = 50
